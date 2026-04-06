@@ -98,25 +98,25 @@ Local-only workspace material should go in ignored directories such as:
 
 Recommended install methods:
 
-```bash
+```text
 uv tool install zotero-headless
 ```
 
 or
 
-```bash
+```text
 pipx install zotero-headless
 ```
 
 Quick one-off use is also possible with:
 
-```bash
+```text
 uvx zotero-headless --help
 ```
 
 From source:
 
-```bash
+```text
 git clone https://github.com/<owner>/zotero-headless.git
 cd zotero-headless
 PYTHONPATH=src python3 -m zotero_headless capabilities
@@ -124,7 +124,7 @@ PYTHONPATH=src python3 -m zotero_headless capabilities
 
 Main entrypoints:
 
-```bash
+```text
 zotero-headless
 zotero-headless-daemon
 zotero-headless-mcp
@@ -132,7 +132,7 @@ zotero-headless-mcp
 
 Short aliases:
 
-```bash
+```text
 zhl
 zhl-daemon
 zhl-mcp
@@ -142,7 +142,7 @@ zhl-mcp
 
 Run the setup flow:
 
-```bash
+```text
 zhl setup start
 ```
 
@@ -171,13 +171,13 @@ That means it also works for:
 
 You can inspect what autodiscovery sees without changing config:
 
-```bash
+```text
 zhl config autodiscover
 ```
 
 You can also reconfigure specific parts later:
 
-```bash
+```text
 zhl setup account
 zhl setup libraries
 zhl setup local
@@ -189,31 +189,31 @@ Use this when you already have Zotero Desktop on your machine and want `zotero-h
 
 1. Install the CLI:
 
-```bash
+```text
 uv tool install zotero-headless
 ```
 
 2. Run guided setup. On a standard desktop install, autodiscovery should usually find your Zotero data directory automatically:
 
-```bash
+```text
 zhl setup start
 ```
 
 3. Install the MCP server into Codex:
 
-```bash
+```text
 zhl setup add codex --scope user
 ```
 
 4. Install the Codex skill pack:
 
-```bash
+```text
 zhl skill install codex
 ```
 
 5. Start using whichever interface fits the task:
 
-```bash
+```text
 zhl local import
 zhl qmd export
 zhl qmd query "papers about retrieval augmented generation"
@@ -234,32 +234,32 @@ Use this when the machine does not run Zotero Desktop and `zotero-headless` is t
 
 1. Install the CLI:
 
-```bash
+```text
 uv tool install zotero-headless
 ```
 
 2. Run guided setup. Autodiscovery will likely find little on a clean server, so the wizard will prompt for your Zotero API key and remote libraries:
 
-```bash
+```text
 zhl setup start
 ```
 
 3. Start the daemon runtime with background sync:
 
-```bash
+```text
 zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
 ```
 
 4. Use the API or MCP depending on the integration:
 
-```bash
+```text
 curl -s http://127.0.0.1:8787/capabilities
 zhl-mcp
 ```
 
 5. If you want Codex or another agent client to connect to that server-hosted install, add MCP setup and install the matching skill pack on the client machine:
 
-```bash
+```text
 zhl setup add codex --scope user
 zhl skill install codex
 ```
@@ -273,7 +273,7 @@ Typical result:
 
 For non-interactive automation, you can still initialize configuration directly:
 
-```bash
+```text
 python -m zotero_headless config init \
   --data-dir "$HOME/Zotero" \
   --api-key "$ZOTERO_API_KEY" \
@@ -285,25 +285,25 @@ python -m zotero_headless config init \
 
 Run the daemon runtime:
 
-```bash
+```text
 zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300
 ```
 
 Run the API directly without the daemon wrapper:
 
-```bash
+```text
 zhl api serve --host 127.0.0.1 --port 8787
 ```
 
 Run the MCP server:
 
-```bash
+```text
 zhl-mcp
 ```
 
 Check version and update:
 
-```bash
+```text
 zhl version
 zhl update --check
 zhl update
@@ -320,7 +320,7 @@ So no, the API is not only exposed on `zotero-headless-daemon`.
 
 Inspect capabilities and daemon state:
 
-```bash
+```text
 zotero-headless capabilities
 zotero-headless daemon status
 zotero-headless doctor
@@ -350,7 +350,7 @@ Use MCP if you want:
 
 Local desktop interoperability:
 
-```bash
+```text
 zotero-headless local libraries
 zotero-headless local import
 zotero-headless local poll
@@ -360,7 +360,7 @@ zotero-headless local apply --library local:1
 
 Remote sync:
 
-```bash
+```text
 zotero-headless sync discover
 zotero-headless sync pull --library user:123456
 zotero-headless sync push --library user:123456
@@ -369,14 +369,14 @@ zotero-headless sync conflicts --library user:123456
 
 qmd flows:
 
-```bash
+```text
 zotero-headless qmd export
 zotero-headless qmd query "retrieval augmented generation"
 ```
 
 MCP/client setup:
 
-```bash
+```text
 zotero-headless setup list
 zotero-headless setup add codex --scope user
 zotero-headless setup add claude-code --scope project
@@ -390,7 +390,7 @@ zotero-headless setup add windsurf --scope user
 
 Agent skill helpers:
 
-```bash
+```text
 zotero-headless skill install codex
 zotero-headless skill install claude-code
 zotero-headless skill install gemini-cli

@@ -23,6 +23,7 @@ from .config import Settings, load_settings, save_settings
 from .core import CanonicalStore, ChangeType, EntityType
 from .daemon import build_daemon_command, build_runtime_command, current_daemon_status, serve_daemon_runtime
 from .library_routing import merged_libraries, prefers_canonical_reads
+from .installer_update import build_update_plan, run_update, version_payload
 from .local_db import LocalZoteroDB
 from .mcp import run_stdio_server
 from .qmd import QmdClient
@@ -56,6 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
     config_sub.add_parser("show")
 
     sub.add_parser("capabilities")
+    sub.add_parser("version")
+    update = sub.add_parser("update")
+    update.add_argument("--check", action="store_true")
 
     setup = sub.add_parser("setup")
     setup_sub = setup.add_subparsers(dest="setup_command", required=True)
@@ -269,6 +273,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "capabilities":
         settings = load_settings(ensure_dirs=False)
         _print(get_capabilities(settings))
+        return 0
+
+    if args.command == "version":
+        _print(version_payload())
+        return 0
+
+    if args.command == "update":
+        plan = build_update_plan()
+        if args.check:
+            _print({"plan": plan.to_dict()})
+            return 0
+        _print(run_update(plan))
         return 0
 
     if args.command == "setup":

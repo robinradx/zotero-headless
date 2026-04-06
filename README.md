@@ -96,6 +96,24 @@ Local-only workspace material should go in ignored directories such as:
 
 ## Install
 
+Recommended install methods:
+
+```bash
+uv tool install zotero-headless
+```
+
+or
+
+```bash
+pipx install zotero-headless
+```
+
+Quick one-off use is also possible with:
+
+```bash
+uvx zotero-headless --help
+```
+
 From source:
 
 ```bash
@@ -193,6 +211,14 @@ Run the MCP server:
 
 ```bash
 zhl-mcp
+```
+
+Check version and update:
+
+```bash
+zhl version
+zhl update --check
+zhl update
 ```
 
 API exposure works in two modes:

@@ -102,7 +102,7 @@ def make_handler(settings: Settings, store: MirrorStore):
                 library_id = params.get("library_id", [None])[0]
                 limit = int(params.get("limit", ["100"])[0])
                 return self._json_response(200, {"changes": canonical.list_changes(library_id=library_id, limit=limit)})
-            if parsed.path == "/sync/canonical/conflicts":
+            if parsed.path == "/sync/conflicts":
                 library_id = params.get("library_id", [None])[0]
                 if not library_id:
                     return self._json_response(400, {"error": "library_id is required"})
@@ -165,20 +165,12 @@ def make_handler(settings: Settings, store: MirrorStore):
             parsed = urlparse(self.path)
             body = self._read_json()
             if parsed.path == "/sync/discover":
-                return self._json_response(200, {"libraries": sync_service.discover_remote_libraries()})
-            if parsed.path == "/sync/pull":
-                library_id = body.get("library_id")
-                if library_id:
-                    return self._json_response(200, {"result": sync_service.sync_remote_library(library_id).__dict__})
-                results = [sync_service.sync_remote_library(lib["library_id"]).__dict__ for lib in store.list_libraries() if lib["source"] == "remote"]
-                return self._json_response(200, {"results": results})
-            if parsed.path == "/sync/canonical/discover":
                 return self._json_response(200, {"libraries": canonical_sync().discover_libraries()})
-            if parsed.path == "/sync/canonical/pull":
+            if parsed.path == "/sync/pull":
                 return self._json_response(200, {"result": canonical_sync().pull_library(body["library_id"])})
-            if parsed.path == "/sync/canonical/push":
+            if parsed.path == "/sync/push":
                 return self._json_response(200, {"result": canonical_sync().push_changes(body["library_id"])})
-            if parsed.path == "/sync/canonical/conflicts/rebase":
+            if parsed.path == "/sync/conflicts/rebase":
                 return self._json_response(
                     200,
                     {
@@ -189,7 +181,7 @@ def make_handler(settings: Settings, store: MirrorStore):
                         )
                     },
                 )
-            if parsed.path == "/sync/canonical/conflicts/accept-remote":
+            if parsed.path == "/sync/conflicts/accept-remote":
                 return self._json_response(
                     200,
                     {
@@ -200,6 +192,14 @@ def make_handler(settings: Settings, store: MirrorStore):
                         )
                     },
                 )
+            if parsed.path == "/sync/mirror/discover":
+                return self._json_response(200, {"libraries": sync_service.discover_remote_libraries()})
+            if parsed.path == "/sync/mirror/pull":
+                library_id = body.get("library_id")
+                if library_id:
+                    return self._json_response(200, {"result": sync_service.sync_remote_library(library_id).__dict__})
+                results = [sync_service.sync_remote_library(lib["library_id"]).__dict__ for lib in store.list_libraries() if lib["source"] == "remote"]
+                return self._json_response(200, {"results": results})
             if parsed.path == "/local/import":
                 return self._json_response(200, local_adapter.import_snapshot(settings.data_dir or ""))
             if parsed.path == "/local/poll":

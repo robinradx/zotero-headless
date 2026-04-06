@@ -24,22 +24,22 @@ from .config import load_settings
 TOOLS = [
     {
         "name": "zotero_list_libraries",
-        "description": "List all libraries across the mirror and canonical headless store.",
+        "description": "List all libraries across the mirror and headless store.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "zotero_core_status",
-        "description": "Report status of the canonical headless store.",
+        "description": "Report status of the headless store.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "zotero_core_libraries",
-        "description": "List libraries in the canonical headless store.",
+        "description": "List libraries in the headless store.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "zotero_core_changes",
-        "description": "List canonical change-log entries, optionally filtered by library.",
+        "description": "List headless store change-log entries, optionally filtered by library.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -60,7 +60,7 @@ TOOLS = [
     },
     {
         "name": "zotero_list_items",
-        "description": "List items in a library from the mirror or canonical headless store.",
+        "description": "List items in a library from the mirror or headless store.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -73,7 +73,7 @@ TOOLS = [
     },
     {
         "name": "zotero_list_collections",
-        "description": "List collections in a library from the mirror or canonical headless store.",
+        "description": "List collections in a library from the mirror or headless store.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -86,7 +86,7 @@ TOOLS = [
     },
     {
         "name": "zotero_get_item",
-        "description": "Get a single item by key from the mirror or canonical headless store.",
+        "description": "Get a single item by key from the mirror or headless store.",
         "inputSchema": {
             "type": "object",
             "properties": {"library_id": {"type": "string"}, "item_key": {"type": "string"}},
@@ -95,7 +95,7 @@ TOOLS = [
     },
     {
         "name": "zotero_get_collection",
-        "description": "Get a single collection by key from the mirror or canonical headless store.",
+        "description": "Get a single collection by key from the mirror or headless store.",
         "inputSchema": {
             "type": "object",
             "properties": {"library_id": {"type": "string"}, "collection_key": {"type": "string"}},
@@ -113,12 +113,12 @@ TOOLS = [
     },
     {
         "name": "zotero_local_import",
-        "description": "Import the configured local Zotero desktop profile into canonical local:* libraries.",
+        "description": "Import the configured local Zotero desktop profile into headless local:* libraries.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "zotero_local_poll",
-        "description": "Poll the configured local Zotero desktop profile for item and collection changes against canonical local:* state.",
+        "description": "Poll the configured local Zotero desktop profile for item and collection changes against headless local:* state.",
         "inputSchema": {
             "type": "object",
             "properties": {"since_version": {"type": "integer"}},
@@ -126,7 +126,7 @@ TOOLS = [
     },
     {
         "name": "zotero_local_plan_apply",
-        "description": "Plan pending canonical local:* writeback operations against the current local Zotero desktop schema without executing them.",
+        "description": "Plan pending headless local:* writeback operations against the current local Zotero desktop schema without executing them.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -137,7 +137,7 @@ TOOLS = [
     },
     {
         "name": "zotero_local_apply",
-        "description": "Apply the currently plannable pending canonical local:* operations to the local Zotero desktop database. Experimental and intentionally narrow in scope.",
+        "description": "Apply the currently plannable pending headless local:* operations to the local Zotero desktop database. Experimental and intentionally narrow in scope.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -147,22 +147,13 @@ TOOLS = [
         },
     },
     {
-        "name": "zotero_sync_pull",
-        "description": "Pull a remote Zotero library into the headless mirror via the Zotero Web API.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {"library_id": {"type": "string"}},
-            "required": ["library_id"],
-        },
-    },
-    {
-        "name": "zotero_sync_canonical_discover",
-        "description": "Discover remote Zotero libraries and register them in the canonical store.",
+        "name": "zotero_sync_mirror_discover",
+        "description": "Discover remote Zotero libraries and register them in the mirror via the Zotero Web API.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
-        "name": "zotero_sync_canonical_pull",
-        "description": "Pull a remote Zotero library into the canonical store via the Zotero Web API.",
+        "name": "zotero_sync_mirror_pull",
+        "description": "Pull a remote Zotero library into the mirror via the Zotero Web API.",
         "inputSchema": {
             "type": "object",
             "properties": {"library_id": {"type": "string"}},
@@ -170,8 +161,22 @@ TOOLS = [
         },
     },
     {
-        "name": "zotero_sync_canonical_push",
-        "description": "Push pending canonical changes for a remote Zotero library to the Zotero Web API.",
+        "name": "zotero_sync_discover",
+        "description": "Discover remote Zotero libraries and register them in the headless store.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "zotero_sync_pull",
+        "description": "Pull a remote Zotero library into the headless store via the Zotero Web API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"library_id": {"type": "string"}},
+            "required": ["library_id"],
+        },
+    },
+    {
+        "name": "zotero_sync_push",
+        "description": "Push pending headless store changes for a remote Zotero library to the Zotero Web API.",
         "inputSchema": {
             "type": "object",
             "properties": {"library_id": {"type": "string"}},
@@ -180,7 +185,7 @@ TOOLS = [
     },
     {
         "name": "zotero_sync_conflicts",
-        "description": "List unresolved canonical sync conflicts for a library.",
+        "description": "List unresolved sync conflicts for a library.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -192,7 +197,7 @@ TOOLS = [
     },
     {
         "name": "zotero_sync_conflict_rebase",
-        "description": "Resolve a canonical sync conflict by keeping the local payload but rebasing it onto the latest remote version.",
+        "description": "Resolve a sync conflict by keeping the local payload but rebasing it onto the latest remote version.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -205,7 +210,7 @@ TOOLS = [
     },
     {
         "name": "zotero_sync_conflict_accept_remote",
-        "description": "Resolve a canonical sync conflict by accepting the latest remote payload and discarding the local pending version.",
+        "description": "Resolve a sync conflict by accepting the latest remote payload and discarding the local pending version.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -288,7 +293,7 @@ TOOLS = [
     },
     {
         "name": "zotero_create_collection",
-        "description": "Create a collection in a remote or canonical Zotero library.",
+        "description": "Create a collection in a remote or headless Zotero library.",
         "inputSchema": {
             "type": "object",
             "properties": {"library_id": {"type": "string"}, "collection": {"type": "object"}},
@@ -297,7 +302,7 @@ TOOLS = [
     },
     {
         "name": "zotero_update_collection",
-        "description": "Update an existing collection in a remote or canonical Zotero library.",
+        "description": "Update an existing collection in a remote or headless Zotero library.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -310,7 +315,7 @@ TOOLS = [
     },
     {
         "name": "zotero_delete_collection",
-        "description": "Delete a collection from a remote or canonical Zotero library.",
+        "description": "Delete a collection from a remote or headless Zotero library.",
         "inputSchema": {
             "type": "object",
             "properties": {"library_id": {"type": "string"}, "collection_key": {"type": "string"}},
@@ -464,12 +469,16 @@ def run_stdio_server(settings: Settings) -> None:
                     )
                 elif name == "zotero_sync_pull":
                     payload = sync_service.sync_remote_library(arguments["library_id"]).__dict__
-                elif name == "zotero_sync_canonical_discover":
+                elif name == "zotero_sync_discover":
                     payload = canonical_sync().discover_libraries()
-                elif name == "zotero_sync_canonical_pull":
+                elif name == "zotero_sync_pull":
                     payload = canonical_sync().pull_library(arguments["library_id"])
-                elif name == "zotero_sync_canonical_push":
+                elif name == "zotero_sync_push":
                     payload = canonical_sync().push_changes(arguments["library_id"])
+                elif name == "zotero_sync_mirror_discover":
+                    payload = sync_service.discover_remote_libraries()
+                elif name == "zotero_sync_mirror_pull":
+                    payload = sync_service.sync_remote_library(arguments["library_id"]).__dict__
                 elif name == "zotero_sync_conflicts":
                     payload = canonical_sync().list_conflicts(
                         arguments["library_id"],

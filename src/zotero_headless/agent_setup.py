@@ -293,17 +293,17 @@ def skill_text(target: str) -> str:
 Use this when working with a `zotero-headless` CLI, API, or MCP runtime.
 
 Priorities:
-- Prefer the canonical headless store and daemon runtime over direct file/database assumptions.
+- Prefer the headless store and daemon runtime over direct file/database assumptions.
 - Use sync conflict tools before retrying remote mutations blindly.
-- For local desktop workflows, distinguish canonical state from the Zotero desktop database and use the local adapter/apply flow.
+- For local desktop workflows, distinguish headless state from the Zotero desktop database and use the local adapter/apply flow.
 - For search/RAG tasks, prefer qmd export/query flows over ad hoc filesystem scans.
 
 High-value commands:
 - `zotero-headless capabilities`
 - `zotero-headless daemon status`
-- `zotero-headless sync canonical-discover`
-- `zotero-headless sync canonical-pull --library <library_id>`
-- `zotero-headless sync canonical-push --library <library_id>`
+- `zotero-headless sync discover`
+- `zotero-headless sync pull --library <library_id>`
+- `zotero-headless sync push --library <library_id>`
 - `zotero-headless sync conflicts --library <library_id>`
 
 When the daemon is running, useful runtime endpoints are:
@@ -367,7 +367,7 @@ def doctor_report(
         },
         "settings": {
             "state_dir": str(settings.resolved_state_dir()),
-            "canonical_db": str(settings.resolved_canonical_db()),
+            "headless_db": str(settings.resolved_canonical_db()),
             "mirror_db": str(settings.resolved_mirror_db()),
             "file_cache_dir": str(settings.resolved_file_cache_dir()),
             "export_dir": str(settings.resolved_export_dir()),

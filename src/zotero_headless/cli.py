@@ -136,12 +136,12 @@ def build_parser() -> argparse.ArgumentParser:
     sync_sub = sync.add_subparsers(dest="sync_command", required=True)
     sync_sub.add_parser("discover")
     sync_pull = sync_sub.add_parser("pull")
-    sync_pull.add_argument("--library")
-    sync_sub.add_parser("canonical-discover")
-    sync_canonical_pull = sync_sub.add_parser("canonical-pull")
-    sync_canonical_pull.add_argument("--library", required=True)
-    sync_canonical_push = sync_sub.add_parser("canonical-push")
-    sync_canonical_push.add_argument("--library", required=True)
+    sync_pull.add_argument("--library", required=True)
+    sync_push = sync_sub.add_parser("push")
+    sync_push.add_argument("--library", required=True)
+    sync_sub.add_parser("mirror-discover")
+    sync_mirror_pull = sync_sub.add_parser("mirror-pull")
+    sync_mirror_pull.add_argument("--library")
     sync_conflicts = sync_sub.add_parser("conflicts")
     sync_conflicts.add_argument("--library", required=True)
     sync_conflicts.add_argument("--entity-type", choices=["item", "collection"])
@@ -459,22 +459,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "sync":
         if args.sync_command == "discover":
-            _print(sync_service.discover_remote_libraries())
-            return 0
-        if args.sync_command == "canonical-discover":
             client = ZoteroWebClient(settings)
             adapter = CanonicalWebSyncAdapter(canonical, client)
             _print(adapter.discover_libraries())
             return 0
-        if args.sync_command == "canonical-pull":
+        if args.sync_command == "pull":
             client = ZoteroWebClient(settings)
             adapter = CanonicalWebSyncAdapter(canonical, client)
             _print(adapter.pull_library(args.library))
             return 0
-        if args.sync_command == "canonical-push":
+        if args.sync_command == "push":
             client = ZoteroWebClient(settings)
             adapter = CanonicalWebSyncAdapter(canonical, client)
             _print(adapter.push_changes(args.library))
+            return 0
+        if args.sync_command == "mirror-discover":
+            _print(sync_service.discover_remote_libraries())
             return 0
         if args.sync_command == "conflicts":
             client = ZoteroWebClient(settings)
@@ -504,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
-        if args.sync_command == "pull":
+        if args.sync_command == "mirror-pull":
             if args.library:
                 _print(sync_service.sync_remote_library(args.library).__dict__)
             else:

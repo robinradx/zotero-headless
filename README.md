@@ -9,7 +9,7 @@
 - a CLI
 - an HTTP API
 - an MCP server
-- a clean-room canonical store
+- a clean-room headless store
 - Zotero web sync
 - local Zotero desktop interoperability
 - qmd-backed semantic search over exported library content
@@ -37,7 +37,7 @@ The project is built for two use cases:
 
 This is still pre-release, but it is no longer just a sketch. The codebase already includes:
 
-- canonical SQLite store plus change log
+- headless SQLite store plus change log
 - `zotero-headless` CLI
 - `zotero-headless-daemon` runtime
 - `zotero-headless-mcp` stdio server
@@ -46,7 +46,7 @@ This is still pre-release, but it is no longer just a sketch. The codebase alrea
 - local Zotero desktop import, polling, and narrow apply/writeback support
 - remote attachment upload/download for the currently supported stored-file and snapshot-style paths
 - Better BibTeX-oriented citekey compatibility
-- qmd export and semantic search over Markdown derived from canonical state
+- qmd export and semantic search over Markdown derived from headless state
 - MCP setup helpers for common agent tools
 - runtime observability endpoints and background sync status
 
@@ -183,6 +183,94 @@ zhl setup libraries
 zhl setup local
 ```
 
+### Example: Codex On A Desktop With Zotero Installed
+
+Use this when you already have Zotero Desktop on your machine and want `zotero-headless` to interoperate with that local profile, while also making MCP and skills available in Codex.
+
+1. Install the CLI:
+
+```bash
+uv tool install zotero-headless
+```
+
+2. Run guided setup. On a standard desktop install, autodiscovery should usually find your Zotero data directory automatically:
+
+```bash
+zhl setup start
+```
+
+3. Install the MCP server into Codex:
+
+```bash
+zhl setup add codex --scope user
+```
+
+4. Install the Codex skill pack:
+
+```bash
+zhl skill install codex
+```
+
+5. Start using whichever interface fits the task:
+
+```bash
+zhl local import
+zhl qmd export
+zhl qmd query "papers about retrieval augmented generation"
+zhl api serve --host 127.0.0.1 --port 8787
+zhl-mcp
+```
+
+Typical result:
+
+- local Zotero desktop data is imported and can be polled/applied
+- Codex can connect through MCP
+- Codex can also call the HTTP API directly when that is the better fit
+- qmd-backed semantic search is available over exported library content
+
+### Example: Standalone Headless Linux Server
+
+Use this when the machine does not run Zotero Desktop and `zotero-headless` is the only Zotero-related runtime on the box.
+
+1. Install the CLI:
+
+```bash
+uv tool install zotero-headless
+```
+
+2. Run guided setup. Autodiscovery will likely find little on a clean server, so the wizard will prompt for your Zotero API key and remote libraries:
+
+```bash
+zhl setup start
+```
+
+3. Start the daemon runtime with background sync:
+
+```bash
+zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
+```
+
+4. Use the API or MCP depending on the integration:
+
+```bash
+curl -s http://127.0.0.1:8787/capabilities
+zhl-mcp
+```
+
+5. If you want Codex or another agent client to connect to that server-hosted install, add MCP setup and install the matching skill pack on the client machine:
+
+```bash
+zhl setup add codex --scope user
+zhl skill install codex
+```
+
+Typical result:
+
+- personal and group libraries sync from Zotero Web
+- the daemon hosts API, MCP, background sync, and semantic search workflows
+- agent clients can use either MCP or the HTTP API
+- no local Zotero GUI or desktop profile is required
+
 For non-interactive automation, you can still initialize configuration directly:
 
 ```bash
@@ -273,9 +361,9 @@ zotero-headless local apply --library local:1
 Remote sync:
 
 ```bash
-zotero-headless sync canonical-discover
-zotero-headless sync canonical-pull --library user:123456
-zotero-headless sync canonical-push --library user:123456
+zotero-headless sync discover
+zotero-headless sync pull --library user:123456
+zotero-headless sync push --library user:123456
 zotero-headless sync conflicts --library user:123456
 ```
 
@@ -316,7 +404,7 @@ zotero-headless skill install opencode
 
 Implemented:
 
-- canonical headless store and mutation log
+- headless store and mutation log
 - runtime daemon, API, and MCP server
 - Zotero web sync for remote libraries
 - local desktop import and polling

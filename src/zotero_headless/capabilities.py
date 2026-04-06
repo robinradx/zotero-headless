@@ -61,7 +61,7 @@ def get_capabilities(settings: Settings) -> dict:
         "desktop_helper_write_api_ready": daemon.write_api_ready,
         "paths": {
             "local_db": str(sqlite_path) if sqlite_path else None,
-            "canonical_db": str(settings.resolved_canonical_db()),
+            "headless_db": str(settings.resolved_canonical_db()),
             "mirror_db": str(settings.resolved_mirror_db()),
             "export_dir": str(settings.resolved_export_dir()),
             "file_cache_dir": str(settings.resolved_file_cache_dir()),

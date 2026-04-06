@@ -73,7 +73,7 @@ class HeadlessService:
     def _require_local_library_staged(self, library_id: str) -> None:
         if not self.canonical.get_library(library_id):
             raise LocalWriteRequiresDaemonError(
-                "Local library is not staged in the canonical store yet. "
+                "Local library is not staged in the headless store yet. "
                 "Run `zotero-headless local import` first so local:* writes can be staged and later applied."
             )
 

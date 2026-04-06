@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zotero-headless"
+version = "0.1.0"
+description = "Headless Zotero-compatible runtime with CLI, HTTP API, MCP, local desktop interoperability, web sync, qmd-backed semantic search, and support for your agent tool of choice"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Robin Rademacher" }]
+dependencies = []
+
+[project.scripts]
+zotero-headless = "zotero_headless.cli:main"
+zotero-headlessd = "zotero_headless.daemon:main"
+zotero-headless-mcp = "zotero_headless.mcp:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

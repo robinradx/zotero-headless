@@ -43,7 +43,7 @@ The inherited Firefox `--headless` flag is not an intentional Zotero feature and
 
 ### Minimal daemon runtime
 
-- `zotero-headlessd`
+- `zotero-headless-daemon`
 - hosts the clean-room core for service and headless deployments
 - runs scheduled or triggered sync jobs
 - exposes HTTP/RPC/MCP

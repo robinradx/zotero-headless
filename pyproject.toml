@@ -14,8 +14,11 @@ dependencies = []
 
 [project.scripts]
 zotero-headless = "zotero_headless.cli:main"
-zotero-headlessd = "zotero_headless.daemon:main"
+zotero-headless-daemon = "zotero_headless.daemon:main"
 zotero-headless-mcp = "zotero_headless.mcp:main"
+zhl = "zotero_headless.cli:main"
+zhl-daemon = "zotero_headless.daemon:main"
+zhl-mcp = "zotero_headless.mcp:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

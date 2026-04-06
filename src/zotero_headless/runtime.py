@@ -16,7 +16,7 @@ class RuntimeMode:
 def server_runtime_mode() -> RuntimeMode:
     return RuntimeMode(
         name="server",
-        description="Clean-room core hosted by zotero-headlessd with web sync and no Zotero desktop dependency.",
+        description="Clean-room core hosted by zotero-headless-daemon with web sync and no Zotero desktop dependency.",
         requires_desktop_zotero=False,
     )
 

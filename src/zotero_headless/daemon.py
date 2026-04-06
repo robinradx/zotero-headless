@@ -273,11 +273,11 @@ def current_daemon_status(settings: Settings | None = None) -> DaemonStatus:
     runtime_state = _read_runtime_state(settings)
     runtime_running = bool(runtime_state) and _probe_runtime_health(settings)
     runtime_message = (
-        "The clean-room zotero-headlessd runtime is implemented and can host the HTTP API/core services directly."
+        "The clean-room zotero-headless-daemon runtime is implemented and can host the HTTP API/core services directly."
     )
     if runtime_running:
         runtime_message = (
-            f"zotero-headlessd is running at http://{settings.daemon_host}:{settings.daemon_port} "
+            f"zotero-headless-daemon is running at http://{settings.daemon_host}:{settings.daemon_port} "
             "and serving the clean-room core API."
         )
     runtime_mode = "running" if runtime_running else "implemented"
@@ -315,7 +315,7 @@ def current_daemon_status(settings: Settings | None = None) -> DaemonStatus:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="zotero-headlessd")
+    parser = argparse.ArgumentParser(prog="zotero-headless-daemon")
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve")
     serve.add_argument("--host")

@@ -26,6 +26,7 @@ from .library_routing import merged_libraries, prefers_canonical_reads
 from .local_db import LocalZoteroDB
 from .mcp import run_stdio_server
 from .qmd import QmdClient
+from .setup_wizard import run_setup_wizard
 from .service import HeadlessService, LocalWriteRequiresDaemonError
 from .store import MirrorStore
 from .sync import SyncService
@@ -46,14 +47,23 @@ def build_parser() -> argparse.ArgumentParser:
     config_init.add_argument("--data-dir")
     config_init.add_argument("--api-key")
     config_init.add_argument("--user-id", type=int)
+    config_init.add_argument("--remote-library-id", action="append", dest="remote_library_ids")
+    config_init.add_argument("--default-library-id")
     config_init.add_argument("--api-base")
     config_init.add_argument("--zotero-bin")
+    config_sub.add_parser("autodiscover")
+    config_sub.add_parser("wizard")
     config_sub.add_parser("show")
 
     sub.add_parser("capabilities")
 
     setup = sub.add_parser("setup")
     setup_sub = setup.add_subparsers(dest="setup_command", required=True)
+    setup_sub.add_parser("start")
+    setup_sub.add_parser("account")
+    setup_sub.add_parser("libraries")
+    setup_sub.add_parser("local")
+    setup_sub.add_parser("wizard")
     setup_sub.add_parser("list")
     setup_show = setup_sub.add_parser("show")
     setup_show.add_argument("tool", choices=list(SUPPORTED_SETUP_TARGETS))
@@ -214,16 +224,24 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "config":
         settings = load_settings()
+        if args.config_command == "autodiscover":
+            from .autodiscover import autodiscover_settings
+
+            _print({"autodiscovered": autodiscover_settings(settings).to_dict(), "settings": settings.as_dict()})
+            return 0
         if args.config_command == "init":
             updated = Settings(
                 data_dir=args.data_dir or settings.data_dir,
                 api_key=args.api_key or settings.api_key,
                 user_id=args.user_id if args.user_id is not None else settings.user_id,
+                remote_library_ids=args.remote_library_ids if args.remote_library_ids is not None else list(settings.remote_library_ids),
+                default_library_id=args.default_library_id or settings.default_library_id,
                 api_base=args.api_base or settings.api_base,
                 state_dir=str(settings.resolved_state_dir()),
                 canonical_db=str(settings.resolved_canonical_db()),
                 mirror_db=str(settings.resolved_mirror_db()),
                 export_dir=str(settings.resolved_export_dir()),
+                file_cache_dir=str(settings.resolved_file_cache_dir()),
                 qmd_collection=settings.qmd_collection,
                 zotero_bin=args.zotero_bin or settings.zotero_bin,
                 daemon_host=settings.daemon_host,
@@ -231,6 +249,18 @@ def main(argv: list[str] | None = None) -> int:
             )
             path = save_settings(updated)
             _print({"config": str(path), "settings": updated.as_dict()})
+            return 0
+        if args.config_command == "wizard":
+            result = run_setup_wizard(settings)
+            path = save_settings(result.settings)
+            _print(
+                {
+                    "config": str(path),
+                    "settings": result.settings.as_dict(),
+                    "discovered_libraries": result.discovered_libraries,
+                    "selected_remote_libraries": result.selected_library_ids,
+                }
+            )
             return 0
         if args.config_command == "show":
             _print(settings.as_dict())
@@ -244,6 +274,26 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "setup":
         settings = load_settings(ensure_dirs=False)
         cwd = Path.cwd()
+        if args.setup_command in {"start", "wizard", "account", "libraries", "local"}:
+            mode = {
+                "start": "full",
+                "wizard": "full",
+                "account": "account",
+                "libraries": "libraries",
+                "local": "local",
+            }[args.setup_command]
+            result = run_setup_wizard(settings, mode=mode)
+            path = save_settings(result.settings)
+            _print(
+                {
+                    "config": str(path),
+                    "autodiscovered": result.autodiscovered,
+                    "settings": result.settings.as_dict(),
+                    "discovered_libraries": result.discovered_libraries,
+                    "selected_remote_libraries": result.selected_library_ids,
+                }
+            )
+            return 0
         if args.setup_command == "list":
             _print({"targets": setup_list(settings, cwd=cwd)})
             return 0

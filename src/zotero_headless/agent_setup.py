@@ -362,7 +362,7 @@ def doctor_report(
         "cli": {
             "zotero_headless": shutil.which("zotero-headless"),
             "zotero_headless_mcp": shutil.which("zotero-headless-mcp"),
-            "zotero_headlessd": shutil.which("zotero-headlessd"),
+            "zotero_headless_daemon": shutil.which("zotero-headless-daemon"),
             "qmd": shutil.which("qmd"),
         },
         "settings": {

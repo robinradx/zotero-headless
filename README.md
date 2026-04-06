@@ -30,7 +30,7 @@ The project is built for two use cases:
   - work against an existing local Zotero profile
   - import, poll, and apply the currently supported subset of changes back to the local desktop database
 - headless/server runtime
-  - run `zotero-headlessd` on a machine without the Zotero GUI
+  - run `zotero-headless-daemon` on a machine without the Zotero GUI
   - expose API and MCP for automation, retrieval, background sync jobs, and agent integrations
 
 ## Status
@@ -39,7 +39,7 @@ This is still pre-release, but it is no longer just a sketch. The codebase alrea
 
 - canonical SQLite store plus change log
 - `zotero-headless` CLI
-- `zotero-headlessd` daemon runtime
+- `zotero-headless-daemon` runtime
 - `zotero-headless-mcp` stdio server
 - local HTTP API
 - Zotero web sync for user and group libraries
@@ -108,47 +108,101 @@ Main entrypoints:
 
 ```bash
 zotero-headless
-zotero-headlessd
+zotero-headless-daemon
 zotero-headless-mcp
+```
+
+Short aliases:
+
+```bash
+zhl
+zhl-daemon
+zhl-mcp
 ```
 
 ## Quick Start
 
-Initialize configuration:
+Run the setup flow:
+
+```bash
+zhl setup start
+```
+
+`setup start` tries autodiscovery first and then falls back to prompts for anything still missing.
+
+Autodiscovery looks for:
+
+- standard Zotero data directories such as `~/Zotero`
+- common Zotero desktop binary locations
+- already-saved API credentials and remote-library selections
+
+Then the wizard will:
+
+- ask for your local Zotero data directory
+- ask for your Zotero API key only when web sync is needed
+- discover your personal library and available group libraries
+- let you choose which remote libraries to configure
+- store a default remote library for later use
+
+That means it also works for:
+
+- a Linux server where this is the only Zotero-related install
+- rerunning setup later to add or remove group libraries
+- switching to a different Zotero account in true headless mode
+- changing local Zotero paths without redoing the whole setup
+
+You can inspect what autodiscovery sees without changing config:
+
+```bash
+zhl config autodiscover
+```
+
+You can also reconfigure specific parts later:
+
+```bash
+zhl setup account
+zhl setup libraries
+zhl setup local
+```
+
+For non-interactive automation, you can still initialize configuration directly:
 
 ```bash
 python -m zotero_headless config init \
   --data-dir "$HOME/Zotero" \
   --api-key "$ZOTERO_API_KEY" \
-  --user-id 123456
+  --user-id 123456 \
+  --remote-library-id user:123456 \
+  --remote-library-id group:654321 \
+  --default-library-id user:123456
 ```
 
 Run the daemon runtime:
 
 ```bash
-zotero-headlessd serve --host 127.0.0.1 --port 8787 --sync-interval 300
+zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300
 ```
 
 Run the API directly without the daemon wrapper:
 
 ```bash
-zotero-headless api serve --host 127.0.0.1 --port 8787
+zhl api serve --host 127.0.0.1 --port 8787
 ```
 
 Run the MCP server:
 
 ```bash
-zotero-headless-mcp
+zhl-mcp
 ```
 
 API exposure works in two modes:
 
 - `zotero-headless api serve`
   - standalone HTTP API process
-- `zotero-headlessd serve`
+- `zotero-headless-daemon serve`
   - daemon runtime that hosts the same HTTP API plus runtime state and background sync
 
-So no, the API is not only exposed on `zotero-headlessd`.
+So no, the API is not only exposed on `zotero-headless-daemon`.
 
 Inspect capabilities and daemon state:
 

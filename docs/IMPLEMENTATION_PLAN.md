@@ -69,7 +69,7 @@ Status: not started
 
 Tasks:
 
-- implement `zotero-headlessd`
+- implement `zotero-headless-daemon`
 - host the canonical store and service APIs there
 - run sync jobs and background indexing/export work
 - support server deployments with no Zotero desktop dependency

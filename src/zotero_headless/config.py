@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .utils import default_config_path, default_state_dir, ensure_dir, read_json, write_json
@@ -12,6 +12,8 @@ class Settings:
     data_dir: str | None = None
     api_key: str | None = None
     user_id: int | None = None
+    remote_library_ids: list[str] = field(default_factory=list)
+    default_library_id: str | None = None
     api_base: str = "https://api.zotero.org"
     state_dir: str | None = None
     canonical_db: str | None = None

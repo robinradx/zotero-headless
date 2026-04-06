@@ -108,12 +108,6 @@ or
 pipx install zotero-headless
 ```
 
-Quick one-off use is also possible with:
-
-```text
-uvx zotero-headless --help
-```
-
 From source:
 
 ```text

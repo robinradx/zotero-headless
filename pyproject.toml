@@ -8,9 +8,14 @@ version = "0.1.0"
 description = "Headless Zotero-compatible runtime with CLI, HTTP API, MCP, local desktop interoperability, web sync, qmd-backed semantic search, and support for your agent tool of choice"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Robin Rademacher" }]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/robinradx/zotero-headless"
+Repository = "https://github.com/robinradx/zotero-headless"
+Issues = "https://github.com/robinradx/zotero-headless/issues"
 
 [project.scripts]
 zotero-headless = "zotero_headless.cli:main"

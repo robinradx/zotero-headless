@@ -5,6 +5,7 @@ from typing import Any
 
 from .config import Settings
 from .local_db import LocalZoteroDB
+from .qmd import QmdAutoIndexer
 from .store import MirrorStore
 from .utils import format_library_id, parse_library_id
 from .web_api import ZoteroWebClient
@@ -26,9 +27,18 @@ class SyncResult:
 
 
 class SyncService:
-    def __init__(self, settings: Settings, store: MirrorStore):
+    def __init__(self, settings: Settings, store: MirrorStore, *, qmd_indexer: QmdAutoIndexer | None = None):
         self.settings = settings
         self.store = store
+        self.qmd_indexer = qmd_indexer
+
+    def _refresh_qmd_mirror(self, library_id: str) -> None:
+        if not self.qmd_indexer:
+            return
+        try:
+            self.qmd_indexer.refresh_mirror_library(self.store, library_id)
+        except Exception:
+            pass
 
     def discover_remote_libraries(self) -> list[dict[str, Any]]:
         client = ZoteroWebClient(self.settings)
@@ -111,6 +121,7 @@ class SyncService:
         if max_version:
             self.store.set_library_version(library_id, max_version)
             result.version = max_version
+        self._refresh_qmd_mirror(library_id)
         return result
 
     def import_local_snapshot(self) -> dict[str, Any]:
@@ -177,4 +188,3 @@ class SyncService:
             self.store.upsert_object(library_id, "item", payload, synced=bool(item.get("synced", 1)), deleted=False)
             imported["items"] += 1
         return imported
-

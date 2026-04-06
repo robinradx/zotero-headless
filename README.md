@@ -12,7 +12,7 @@
 - a clean-room headless store
 - Zotero web sync
 - local Zotero desktop interoperability
-- qmd-backed semantic search over exported library content
+- qmd-backed semantic search that is automatically refreshed from library changes
 - compatibility with the agent tool of your choice through API or MCP
 
 All three main interfaces are first-class:
@@ -46,7 +46,7 @@ This is still pre-release, but it is no longer just a sketch. The codebase alrea
 - local Zotero desktop import, polling, and narrow apply/writeback support
 - remote attachment upload/download for the currently supported stored-file and snapshot-style paths
 - Better BibTeX-oriented citekey compatibility
-- qmd export and semantic search over Markdown derived from headless state
+- qmd export plus semantic search over Markdown derived from headless state, with automatic refresh on dataset changes
 - MCP setup helpers for common agent tools
 - runtime observability endpoints and background sync status
 
@@ -58,7 +58,7 @@ Typical end-user use cases:
 - query or mutate libraries through CLI, API, or MCP
 - sync against Zotero web libraries without requiring the Zotero GUI to be running
 - work against a local desktop Zotero profile when local interoperability is needed
-- export/query library content through qmd-backed semantic search flows
+- query library content through qmd-backed semantic search flows without manually rebuilding the qmd index after normal sync/write activity
 
 This repository also contains contribution and architecture material because the project is still evolving, but the repo is not meant only for contributors.
 
@@ -209,7 +209,6 @@ zhl skill install codex
 
 ```text
 zhl local import
-zhl qmd export
 zhl qmd query "papers about retrieval augmented generation"
 zhl api serve --host 127.0.0.1 --port 8787
 zhl-mcp
@@ -220,7 +219,7 @@ Typical result:
 - local Zotero desktop data is imported and can be polled/applied
 - Codex can connect through MCP
 - Codex can also call the HTTP API directly when that is the better fit
-- qmd-backed semantic search is available over exported library content
+- qmd-backed semantic search stays in sync automatically as headless data changes
 
 ### Example: Standalone Headless Linux Server
 
@@ -301,6 +300,13 @@ Check version and update:
 zhl version
 zhl update --check
 zhl update
+```
+
+Release maintenance:
+
+```text
+make version VERSION=0.3.1
+make release-check
 ```
 
 API exposure works in two modes:
@@ -385,6 +391,7 @@ zotero-headless setup add windsurf --scope user
 Agent skill helpers:
 
 ```text
+zotero-headless skill add claude-desktop
 zotero-headless skill install codex
 zotero-headless skill install claude-code
 zotero-headless skill install gemini-cli
@@ -393,6 +400,8 @@ zotero-headless skill install antigravity
 zotero-headless skill install openclaw
 zotero-headless skill install opencode
 ```
+
+`zotero-headless skill add claude-desktop` generates a Claude skill archive on your Desktop. Upload that archive in the Skills section of Claude Desktop or on claude.ai.
 
 ## What Is Implemented vs. What Is Still Narrow
 

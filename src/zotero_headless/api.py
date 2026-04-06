@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .adapters.local_desktop import LocalDesktopAdapter
 from .adapters.web_sync import CanonicalWebSyncAdapter
+from . import __version__
 from .capabilities import get_capabilities
 from .config import Settings
 from .core import CanonicalStore, EntityType
@@ -15,7 +16,7 @@ from .daemon import current_daemon_status
 from .library_routing import merged_libraries, prefers_canonical_reads
 from .local_db import LocalZoteroDB
 from .observability import build_metrics_text, read_jobs_state, read_runtime_state, record_http_request
-from .qmd import QmdClient
+from .qmd import QmdAutoIndexer, QmdClient
 from .service import HeadlessService, LocalWriteRequiresDaemonError
 from .store import MirrorStore
 from .sync import SyncService
@@ -24,16 +25,17 @@ from .web_api import ZoteroWebClient
 
 def make_handler(settings: Settings, store: MirrorStore):
     canonical = CanonicalStore(settings.resolved_canonical_db())
-    sync_service = SyncService(settings, store)
-    service = HeadlessService(settings, store, canonical)
+    qmd_indexer = QmdAutoIndexer(settings)
+    sync_service = SyncService(settings, store, qmd_indexer=qmd_indexer)
+    service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
     qmd = QmdClient(settings)
-    local_adapter = LocalDesktopAdapter(canonical)
+    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
 
     def canonical_sync() -> CanonicalWebSyncAdapter:
-        return CanonicalWebSyncAdapter(canonical, ZoteroWebClient(settings))
+        return CanonicalWebSyncAdapter(canonical, ZoteroWebClient(settings), qmd_indexer=qmd_indexer)
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "zotero-headless/0.1"
+        server_version = f"zotero-headless/{__version__}"
 
         def log_message(self, format: str, *args) -> None:
             return

@@ -5,6 +5,7 @@ from typing import Any
 from .config import Settings
 from .core import CanonicalStore, ChangeType, EntityType
 from .library_routing import prefers_canonical_writes
+from .qmd import QmdAutoIndexer
 from .store import MirrorStore
 from .sync import SyncService
 from .utils import (
@@ -23,11 +24,27 @@ class LocalWriteRequiresDaemonError(RuntimeError):
 
 
 class HeadlessService:
-    def __init__(self, settings: Settings, store: MirrorStore, canonical: CanonicalStore):
+    def __init__(
+        self,
+        settings: Settings,
+        store: MirrorStore,
+        canonical: CanonicalStore,
+        *,
+        qmd_indexer: QmdAutoIndexer | None = None,
+    ):
         self.settings = settings
         self.store = store
         self.canonical = canonical
-        self.sync = SyncService(settings, store)
+        self.qmd_indexer = qmd_indexer
+        self.sync = SyncService(settings, store, qmd_indexer=qmd_indexer)
+
+    def _refresh_qmd_canonical(self, library_id: str) -> None:
+        if not self.qmd_indexer:
+            return
+        try:
+            self.qmd_indexer.refresh_canonical_library(self.canonical, library_id)
+        except Exception:
+            pass
 
     def _normalize_item_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload)
@@ -96,23 +113,27 @@ class HeadlessService:
         library_type, _ = parse_library_id(library_id)
         if prefers_canonical_writes(self.canonical, library_id):
             payload = self._normalize_item_payload(item_data)
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.ITEM,
                 payload,
                 synced=False,
                 change_type=ChangeType.CREATE,
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         if library_type == "local":
             self._require_local_library_staged(library_id)
             payload = self._normalize_item_payload(item_data)
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.ITEM,
                 payload,
                 synced=False,
                 change_type=ChangeType.CREATE,
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         library = self.store.get_library(library_id) or {}
         client = ZoteroWebClient(self.settings)
         result = client.create_item(library_id, item_data, library_version=library.get("version"))
@@ -128,7 +149,7 @@ class HeadlessService:
             base = {} if replace else dict(current["payload"])
             base.update(item_data)
             payload = self._normalize_item_payload(base)
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.ITEM,
                 payload,
@@ -137,6 +158,8 @@ class HeadlessService:
                 change_type=ChangeType.UPDATE,
                 base_version=current["version"],
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         if library_type == "local":
             self._require_local_library_staged(library_id)
             current = self.canonical.get_entity(library_id, EntityType.ITEM, item_key)
@@ -145,7 +168,7 @@ class HeadlessService:
             base = {} if replace else dict(current["payload"])
             base.update(item_data)
             payload = self._normalize_item_payload(base)
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.ITEM,
                 payload,
@@ -154,6 +177,8 @@ class HeadlessService:
                 change_type=ChangeType.UPDATE,
                 base_version=current["version"],
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         current = self.store.get_object(library_id, "item", item_key)
         if not current:
             raise KeyError(f"Item not found: {library_id}/{item_key}")
@@ -173,10 +198,12 @@ class HeadlessService:
         library_type, _ = parse_library_id(library_id)
         if prefers_canonical_writes(self.canonical, library_id):
             item = self.canonical.delete_entity(library_id, EntityType.ITEM, item_key)
+            self._refresh_qmd_canonical(library_id)
             return {"deleted": True, "item": item}
         if library_type == "local":
             self._require_local_library_staged(library_id)
             item = self.canonical.delete_entity(library_id, EntityType.ITEM, item_key)
+            self._refresh_qmd_canonical(library_id)
             return {"deleted": True, "item": item}
         current = self.store.get_object(library_id, "item", item_key)
         if not current:
@@ -190,22 +217,26 @@ class HeadlessService:
         library_type, _ = parse_library_id(library_id)
         payload = self._normalize_collection_payload(collection_data)
         if prefers_canonical_writes(self.canonical, library_id):
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.COLLECTION,
                 payload,
                 synced=False,
                 change_type=ChangeType.CREATE,
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         if library_type == "local":
             self._require_local_library_staged(library_id)
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.COLLECTION,
                 payload,
                 synced=False,
                 change_type=ChangeType.CREATE,
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         library = self.store.get_library(library_id) or {}
         client = ZoteroWebClient(self.settings)
         result = client.create_collection(library_id, payload, library_version=library.get("version"))
@@ -228,7 +259,7 @@ class HeadlessService:
             base = {} if replace else dict(current["payload"])
             base.update(collection_data)
             payload = self._normalize_collection_payload(base)
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.COLLECTION,
                 payload,
@@ -237,6 +268,8 @@ class HeadlessService:
                 change_type=ChangeType.UPDATE,
                 base_version=current["version"],
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         if library_type == "local":
             self._require_local_library_staged(library_id)
             current = self.canonical.get_entity(library_id, EntityType.COLLECTION, collection_key)
@@ -245,7 +278,7 @@ class HeadlessService:
             base = {} if replace else dict(current["payload"])
             base.update(collection_data)
             payload = self._normalize_collection_payload(base)
-            return self.canonical.save_entity(
+            result = self.canonical.save_entity(
                 library_id,
                 EntityType.COLLECTION,
                 payload,
@@ -254,6 +287,8 @@ class HeadlessService:
                 change_type=ChangeType.UPDATE,
                 base_version=current["version"],
             )
+            self._refresh_qmd_canonical(library_id)
+            return result
         current = self.store.get_object(library_id, "collection", collection_key)
         if not current:
             raise KeyError(f"Collection not found: {library_id}/{collection_key}")
@@ -275,10 +310,12 @@ class HeadlessService:
         library_type, _ = parse_library_id(library_id)
         if prefers_canonical_writes(self.canonical, library_id):
             collection = self.canonical.delete_entity(library_id, EntityType.COLLECTION, collection_key)
+            self._refresh_qmd_canonical(library_id)
             return {"deleted": True, "collection": collection}
         if library_type == "local":
             self._require_local_library_staged(library_id)
             collection = self.canonical.delete_entity(library_id, EntityType.COLLECTION, collection_key)
+            self._refresh_qmd_canonical(library_id)
             return {"deleted": True, "collection": collection}
         current = self.store.get_object(library_id, "collection", collection_key)
         if not current:

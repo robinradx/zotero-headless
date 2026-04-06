@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from zotero_headless.agent_setup import (
@@ -173,10 +174,39 @@ class AgentSetupTests(unittest.TestCase):
                 self.assertTrue(skill_path.exists(), msg=target)
                 self.assertIn("Zotero Headless", skill_path.read_text(encoding="utf-8"))
 
+    def test_install_skill_for_claude_desktop_writes_archive_to_desktop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+
+            result = install_skill("claude-desktop", home=home)
+
+            archive_path = home / "Desktop" / f"{SERVER_NAME}-claude-desktop-skill.zip"
+            self.assertEqual(result["path"], str(archive_path))
+            self.assertEqual(result["format"], "zip")
+            self.assertTrue(archive_path.exists())
+            self.assertTrue(any("Claude Desktop" in line for line in result["instructions"]))
+            with zipfile.ZipFile(archive_path) as zf:
+                self.assertEqual(set(zf.namelist()), {"SKILL.md", "metadata.json"})
+                self.assertIn("Zotero Headless", zf.read("SKILL.md").decode("utf-8"))
+                metadata = json.loads(zf.read("metadata.json").decode("utf-8"))
+                self.assertEqual(metadata["slug"], SERVER_NAME)
+
     def test_export_skill_returns_content(self):
         exported = export_skill("codex")
         self.assertEqual(exported["target"], "codex")
         self.assertIn("sync conflicts", exported["content"])
+        self.assertIn("Use qmd semantic search for exploratory retrieval", exported["content"])
+        self.assertIn("Prefer the HTTP API over MCP", exported["content"])
+        self.assertIn("Do not use qmd semantic search when the task already names exact objects", exported["content"])
+        self.assertIn("automatically maintained from dataset changes", exported["content"])
+        self.assertNotIn("Use `qmd export` before qmd queries", exported["content"])
+
+    def test_export_skill_for_claude_desktop_describes_archive(self):
+        exported = export_skill("claude-desktop")
+        self.assertEqual(exported["target"], "claude-desktop")
+        self.assertEqual(exported["format"], "zip")
+        self.assertEqual(exported["archive_contents"], ["SKILL.md", "metadata.json"])
+        self.assertIn("Use qmd semantic search for exploratory retrieval", exported["content"])
 
     def test_doctor_report_includes_setup_targets_and_cli_checks(self):
         with tempfile.TemporaryDirectory() as tmp:

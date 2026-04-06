@@ -26,7 +26,7 @@ from .library_routing import merged_libraries, prefers_canonical_reads
 from .installer_update import build_update_plan, run_update, version_payload
 from .local_db import LocalZoteroDB
 from .mcp import run_stdio_server
-from .qmd import QmdClient
+from .qmd import QmdAutoIndexer, QmdClient
 from .setup_wizard import run_setup_wizard
 from .service import HeadlessService, LocalWriteRequiresDaemonError
 from .store import MirrorStore
@@ -81,6 +81,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     skill = sub.add_parser("skill")
     skill_sub = skill.add_subparsers(dest="skill_command", required=True)
+    skill_add = skill_sub.add_parser("add")
+    skill_add.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
     skill_install = skill_sub.add_parser("install")
     skill_install.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
     skill_update = skill_sub.add_parser("update")
@@ -324,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if args.command == "skill":
-        if args.skill_command in {"install", "update"}:
+        if args.skill_command in {"add", "install", "update"}:
             _print(install_skill(args.tool))
             return 0
         if args.skill_command == "export":
@@ -363,9 +365,10 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings()
     canonical = CanonicalStore(settings.resolved_canonical_db())
     store = MirrorStore(settings.resolved_mirror_db())
-    sync_service = SyncService(settings, store)
-    service = HeadlessService(settings, store, canonical)
-    local_adapter = LocalDesktopAdapter(canonical)
+    qmd_indexer = QmdAutoIndexer(settings)
+    sync_service = SyncService(settings, store, qmd_indexer=qmd_indexer)
+    service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
+    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
 
     if args.command == "core":
         if args.core_command == "status":
@@ -390,16 +393,19 @@ def main(argv: list[str] | None = None) -> int:
             payload = json.loads(args.json_payload)
             existing = canonical.get_entity(args.library_id, EntityType.ITEM, args.key or payload.get("key", ""))
             change_type = ChangeType.UPDATE if existing else ChangeType.CREATE
-            _print(
-                canonical.save_entity(
-                    args.library_id,
-                    EntityType.ITEM,
-                    payload,
-                    entity_key=args.key,
-                    synced=False,
-                    change_type=change_type,
-                )
+            result = canonical.save_entity(
+                args.library_id,
+                EntityType.ITEM,
+                payload,
+                entity_key=args.key,
+                synced=False,
+                change_type=change_type,
             )
+            try:
+                qmd_indexer.refresh_canonical_library(canonical, args.library_id)
+            except Exception:
+                pass
+            _print(result)
             return 0
 
     if args.command == "local":
@@ -460,17 +466,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "sync":
         if args.sync_command == "discover":
             client = ZoteroWebClient(settings)
-            adapter = CanonicalWebSyncAdapter(canonical, client)
+            adapter = CanonicalWebSyncAdapter(canonical, client, qmd_indexer=qmd_indexer)
             _print(adapter.discover_libraries())
             return 0
         if args.sync_command == "pull":
             client = ZoteroWebClient(settings)
-            adapter = CanonicalWebSyncAdapter(canonical, client)
+            adapter = CanonicalWebSyncAdapter(canonical, client, qmd_indexer=qmd_indexer)
             _print(adapter.pull_library(args.library))
             return 0
         if args.sync_command == "push":
             client = ZoteroWebClient(settings)
-            adapter = CanonicalWebSyncAdapter(canonical, client)
+            adapter = CanonicalWebSyncAdapter(canonical, client, qmd_indexer=qmd_indexer)
             _print(adapter.push_changes(args.library))
             return 0
         if args.sync_command == "mirror-discover":
@@ -478,13 +484,13 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.sync_command == "conflicts":
             client = ZoteroWebClient(settings)
-            adapter = CanonicalWebSyncAdapter(canonical, client)
+            adapter = CanonicalWebSyncAdapter(canonical, client, qmd_indexer=qmd_indexer)
             entity_type = EntityType(args.entity_type) if args.entity_type else None
             _print(adapter.list_conflicts(args.library, entity_type=entity_type))
             return 0
         if args.sync_command == "conflict-rebase":
             client = ZoteroWebClient(settings)
-            adapter = CanonicalWebSyncAdapter(canonical, client)
+            adapter = CanonicalWebSyncAdapter(canonical, client, qmd_indexer=qmd_indexer)
             _print(
                 adapter.rebase_conflict_keep_local(
                     args.library,
@@ -495,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.sync_command == "conflict-accept-remote":
             client = ZoteroWebClient(settings)
-            adapter = CanonicalWebSyncAdapter(canonical, client)
+            adapter = CanonicalWebSyncAdapter(canonical, client, qmd_indexer=qmd_indexer)
             _print(
                 adapter.accept_remote_conflict(
                     args.library,

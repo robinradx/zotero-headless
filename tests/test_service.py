@@ -8,6 +8,15 @@ from zotero_headless.service import HeadlessService, LocalWriteRequiresDaemonErr
 from zotero_headless.store import MirrorStore
 
 
+class FakeQmdIndexer:
+    def __init__(self):
+        self.canonical_refreshes: list[str] = []
+
+    def refresh_canonical_library(self, canonical: CanonicalStore, library_id: str):
+        self.canonical_refreshes.append(library_id)
+        return {"enabled": True, "library_id": library_id}
+
+
 class HeadlessServiceTests(unittest.TestCase):
     def test_local_writes_require_staged_library(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -139,6 +148,24 @@ class HeadlessServiceTests(unittest.TestCase):
             self.assertEqual(collection["payload"]["name"], "Queued Remote Collection")
             self.assertFalse(collection["synced"])
             self.assertIsNotNone(canonical.get_entity("user:123", EntityType.COLLECTION, collection["entity_key"]))
+
+    def test_headless_writes_trigger_qmd_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(state_dir=tmp, mirror_db=str(Path(tmp) / "mirror.sqlite"))
+            store = MirrorStore(Path(tmp) / "mirror.sqlite")
+            canonical = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            canonical.upsert_library("headless:demo", name="Demo")
+            qmd_indexer = FakeQmdIndexer()
+            service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
+
+            item = service.create_item("headless:demo", {"itemType": "book", "title": "Draft"})
+            service.update_item("headless:demo", item["entity_key"], {"title": "Updated"})
+            service.delete_item("headless:demo", item["entity_key"])
+
+            self.assertEqual(
+                qmd_indexer.canonical_refreshes,
+                ["headless:demo", "headless:demo", "headless:demo"],
+            )
 
 
 if __name__ == "__main__":

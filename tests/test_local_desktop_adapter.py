@@ -9,6 +9,15 @@ from zotero_headless.adapters.local_desktop import LocalDesktopAdapter
 from zotero_headless.core import CanonicalStore, ChangeType, EntityType
 
 
+class FakeQmdIndexer:
+    def __init__(self):
+        self.refreshes: list[str] = []
+
+    def refresh_canonical_library(self, canonical, library_id: str):
+        self.refreshes.append(library_id)
+        return {"enabled": True, "library_id": library_id}
+
+
 def create_local_zotero_fixture(data_dir: Path) -> Path:
     data_dir.mkdir(parents=True, exist_ok=True)
     sqlite_path = data_dir / "zotero.sqlite"
@@ -169,6 +178,18 @@ class LocalDesktopAdapterTests(unittest.TestCase):
             self.assertTrue(item["synced"])
             collection = canonical.get_entity("local:1", EntityType.COLLECTION, "COLL1234")
             self.assertEqual(collection["payload"]["name"], "Reading")
+
+    def test_import_snapshot_triggers_qmd_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "Zotero"
+            create_local_zotero_fixture(data_dir)
+            canonical = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            qmd_indexer = FakeQmdIndexer()
+            adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
+
+            adapter.import_snapshot(str(data_dir))
+
+            self.assertEqual(qmd_indexer.refreshes, ["local:1"])
 
     def test_poll_changes_detects_create_update_delete(self):
         with tempfile.TemporaryDirectory() as tmp:

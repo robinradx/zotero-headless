@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -156,50 +157,106 @@ class QmdClient:
             lines.append("```")
             lines.append("")
         filename.write_text("\n".join(lines), encoding="utf-8")
+        return filename
+
+    def _prune_library_export(self, library_id: str, expected_files: set[Path]) -> int:
+        library_dir = self.export_dir / sanitize_component(library_id)
+        if not library_dir.exists():
+            return 0
+        pruned = 0
+        for path in library_dir.rglob("*.md"):
+            if path not in expected_files:
+                path.unlink()
+                pruned += 1
+        for directory in sorted((path for path in library_dir.rglob("*") if path.is_dir()), reverse=True):
+            if not any(directory.iterdir()):
+                directory.rmdir()
+        if library_dir.exists() and not any(library_dir.iterdir()):
+            library_dir.rmdir()
+        return pruned
+
+    def _prune_export_root(self, active_library_ids: set[str]) -> int:
+        if not self.export_dir.exists():
+            return 0
+        active_dirs = {self.export_dir / sanitize_component(library_id) for library_id in active_library_ids}
+        pruned = 0
+        for child in self.export_dir.iterdir():
+            if child.is_dir() and child not in active_dirs:
+                shutil.rmtree(child)
+                pruned += 1
+        return pruned
 
     def export_from_store(self, store: MirrorStore, library_id: str | None = None) -> dict[str, Any]:
         ensure_dir(self.export_dir)
         exported = 0
+        pruned = 0
         libraries = [store.get_library(library_id)] if library_id else store.list_libraries()
+        active_library_ids: set[str] = set()
         for library in libraries:
             if not library:
                 continue
             lib_id = library["library_id"]
+            active_library_ids.add(lib_id)
+            expected_files: set[Path] = set()
             for kind in ("collection", "search", "item"):
                 for obj in store.list_objects(lib_id, kind, limit=100000):
-                    self._write_markdown(
-                        lib_id,
-                        kind,
-                        obj["object_key"],
-                        obj.get("title"),
-                        obj["version"],
-                        obj["payload"],
+                    expected_files.add(
+                        self._write_markdown(
+                            lib_id,
+                            kind,
+                            obj["object_key"],
+                            obj.get("title"),
+                            obj["version"],
+                            obj["payload"],
+                        )
                     )
                     exported += 1
+            pruned += self._prune_library_export(lib_id, expected_files)
+        if library_id is None:
+            pruned += self._prune_export_root(active_library_ids)
         self.ensure_collection()
-        return {"exported": exported, "export_dir": str(self.export_dir), "collection": self.settings.qmd_collection}
+        return {
+            "exported": exported,
+            "pruned": pruned,
+            "export_dir": str(self.export_dir),
+            "collection": self.settings.qmd_collection,
+        }
 
     def export_from_canonical(self, canonical: CanonicalStore, library_id: str | None = None) -> dict[str, Any]:
         ensure_dir(self.export_dir)
         exported = 0
+        pruned = 0
         libraries = [canonical.get_library(library_id)] if library_id else canonical.list_libraries()
+        active_library_ids: set[str] = set()
         for library in libraries:
             if not library:
                 continue
             lib_id = library["library_id"]
+            active_library_ids.add(lib_id)
+            expected_files: set[Path] = set()
             for entity_type in (EntityType.COLLECTION, EntityType.SEARCH, EntityType.ITEM):
                 for obj in canonical.list_entities(lib_id, entity_type, limit=100000):
-                    self._write_markdown(
-                        lib_id,
-                        entity_type.value,
-                        obj["entity_key"],
-                        obj.get("title"),
-                        obj["version"],
-                        obj["payload"],
+                    expected_files.add(
+                        self._write_markdown(
+                            lib_id,
+                            entity_type.value,
+                            obj["entity_key"],
+                            obj.get("title"),
+                            obj["version"],
+                            obj["payload"],
+                        )
                     )
                     exported += 1
+            pruned += self._prune_library_export(lib_id, expected_files)
+        if library_id is None:
+            pruned += self._prune_export_root(active_library_ids)
         self.ensure_collection()
-        return {"exported": exported, "export_dir": str(self.export_dir), "collection": self.settings.qmd_collection}
+        return {
+            "exported": exported,
+            "pruned": pruned,
+            "export_dir": str(self.export_dir),
+            "collection": self.settings.qmd_collection,
+        }
 
     def embed(self, force: bool = False) -> str:
         self.ensure_collection()
@@ -229,3 +286,25 @@ class QmdClient:
                     filtered.append(row)
             return filtered
         return payload
+
+
+class QmdAutoIndexer:
+    def __init__(self, settings: Settings):
+        self.client = QmdClient(settings)
+
+    def enabled(self) -> bool:
+        return shutil.which("qmd") is not None
+
+    def refresh_canonical_library(self, canonical: CanonicalStore, library_id: str) -> dict[str, Any]:
+        if not self.enabled():
+            return {"enabled": False, "reason": "qmd_missing", "library_id": library_id}
+        result = self.client.export_from_canonical(canonical, library_id)
+        self.client.embed(force=True)
+        return {"enabled": True, "library_id": library_id, **result}
+
+    def refresh_mirror_library(self, store: MirrorStore, library_id: str) -> dict[str, Any]:
+        if not self.enabled():
+            return {"enabled": False, "reason": "qmd_missing", "library_id": library_id}
+        result = self.client.export_from_store(store, library_id)
+        self.client.embed(force=True)
+        return {"enabled": True, "library_id": library_id, **result}

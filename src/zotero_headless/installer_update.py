@@ -8,9 +8,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import __version__
 
 PACKAGE_NAME = "zotero-headless"
-FALLBACK_VERSION = "0.1.0"
+FALLBACK_VERSION = __version__
 
 
 @dataclass(slots=True)

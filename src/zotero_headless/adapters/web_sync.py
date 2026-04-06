@@ -8,6 +8,7 @@ from pathlib import Path
 import zipfile
 
 from ..core import CanonicalStore, ChangeRecord, EntityType
+from ..qmd import QmdAutoIndexer
 from ..utils import annotation_display_title, detect_citation_aliases, detect_citation_key, format_library_id, now_iso
 from ..web_api import ZoteroApiError, ZoteroWebClient
 
@@ -57,10 +58,19 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         "image/bmp": "bmp",
     }
 
-    def __init__(self, store: CanonicalStore, client: ZoteroWebClient):
+    def __init__(self, store: CanonicalStore, client: ZoteroWebClient, *, qmd_indexer: QmdAutoIndexer | None = None):
         self.store = store
         self.client = client
         self.file_cache_dir = self.client.settings.resolved_file_cache_dir()
+        self.qmd_indexer = qmd_indexer
+
+    def _refresh_qmd(self, library_id: str) -> None:
+        if not self.qmd_indexer:
+            return
+        try:
+            self.qmd_indexer.refresh_canonical_library(self.store, library_id)
+        except Exception:
+            pass
 
     def discover_libraries(self) -> list[dict[str, object]]:
         key_info = self.client.get_current_key()
@@ -118,7 +128,7 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         file_result = self._sync_attachment_files(library_id)
         fulltext_result = self._pull_fulltext(library_id, since=int((self.store.get_library(library_id) or {}).get("metadata", {}).get("fulltext_version") or 0))
         pruned = self._prune_deleted_attachment_files(library_id)
-        return {
+        result = {
             "library_id": library_id,
             "updated": updated,
             "deleted": deleted,
@@ -129,6 +139,8 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
             "fulltext_updated": fulltext_result["updated"],
             "fulltext_version": fulltext_result["fulltext_version"],
         }
+        self._refresh_qmd(library_id)
+        return result
 
     def list_conflicts(self, library_id: str, *, entity_type: EntityType | None = None) -> list[dict[str, object]]:
         return self.store.list_conflicted_entities(library_id, entity_type, limit=1000)
@@ -139,7 +151,9 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         entity_type: EntityType,
         entity_key: str,
     ) -> dict[str, object]:
-        return self.store.rebase_conflict_keep_local(library_id, entity_type, entity_key)
+        result = self.store.rebase_conflict_keep_local(library_id, entity_type, entity_key)
+        self._refresh_qmd(library_id)
+        return result
 
     def accept_remote_conflict(
         self,
@@ -147,7 +161,9 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         entity_type: EntityType,
         entity_key: str,
     ) -> dict[str, object]:
-        return self.store.accept_remote_conflict(library_id, entity_type, entity_key)
+        result = self.store.accept_remote_conflict(library_id, entity_type, entity_key)
+        self._refresh_qmd(library_id)
+        return result
 
     def _pull_kind(
         self,

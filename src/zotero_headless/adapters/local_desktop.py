@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from ..core import CanonicalStore, ChangeRecord, ChangeType, EntityType
 from ..local_db import LocalZoteroDB, LocalZoteroWriteDB
+from ..qmd import QmdAutoIndexer
 from ..utils import (
     annotation_display_title,
     detect_citation_aliases,
@@ -73,8 +74,17 @@ class LocalDesktopAdapter:
         "image/bmp": "bmp",
     }
 
-    def __init__(self, canonical: CanonicalStore):
+    def __init__(self, canonical: CanonicalStore, *, qmd_indexer: QmdAutoIndexer | None = None):
         self.canonical = canonical
+        self.qmd_indexer = qmd_indexer
+
+    def _refresh_qmd(self, library_id: str) -> None:
+        if not self.qmd_indexer:
+            return
+        try:
+            self.qmd_indexer.refresh_canonical_library(self.canonical, library_id)
+        except Exception:
+            pass
 
     def _db(self, data_dir: str) -> LocalZoteroDB:
         sqlite_path = Path(data_dir).expanduser() / "zotero.sqlite"
@@ -219,6 +229,7 @@ class LocalDesktopAdapter:
                 "deleted_collections": deleted_collections,
                 "deleted_items": deleted_items,
             }
+            self._refresh_qmd(library_id)
             summaries.append(summary)
             totals["libraries"] += 1
             totals["collections"] += len(collection_keys)

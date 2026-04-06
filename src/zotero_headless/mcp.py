@@ -13,12 +13,13 @@ from .core import CanonicalStore, EntityType
 from .daemon import current_daemon_status
 from .library_routing import merged_libraries, prefers_canonical_reads
 from .local_db import LocalZoteroDB
-from .qmd import QmdClient
+from .qmd import QmdAutoIndexer, QmdClient
 from .service import HeadlessService, LocalWriteRequiresDaemonError
 from .store import MirrorStore
 from .sync import SyncService
 from .web_api import ZoteroWebClient
 from .config import load_settings
+from . import __version__
 
 
 TOOLS = [
@@ -339,13 +340,14 @@ def _result(payload: Any) -> dict[str, Any]:
 def run_stdio_server(settings: Settings) -> None:
     canonical = CanonicalStore(settings.resolved_canonical_db())
     store = MirrorStore(settings.resolved_mirror_db())
-    sync_service = SyncService(settings, store)
-    service = HeadlessService(settings, store, canonical)
+    qmd_indexer = QmdAutoIndexer(settings)
+    sync_service = SyncService(settings, store, qmd_indexer=qmd_indexer)
+    service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
     qmd = QmdClient(settings)
-    local_adapter = LocalDesktopAdapter(canonical)
+    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
 
     def canonical_sync() -> CanonicalWebSyncAdapter:
-        return CanonicalWebSyncAdapter(canonical, ZoteroWebClient(settings))
+        return CanonicalWebSyncAdapter(canonical, ZoteroWebClient(settings), qmd_indexer=qmd_indexer)
 
     for line in sys.stdin:
         if not line.strip():
@@ -363,7 +365,7 @@ def run_stdio_server(settings: Settings) -> None:
                     "result": {
                         "protocolVersion": "2025-11-25",
                         "capabilities": {"tools": {"listChanged": False}},
-                        "serverInfo": {"name": "zotero-headless", "version": "0.1.0"},
+                        "serverInfo": {"name": "zotero-headless", "version": __version__},
                     },
                 }
             elif method == "notifications/initialized":
@@ -467,8 +469,6 @@ def run_stdio_server(settings: Settings) -> None:
                         library_id=arguments.get("library_id"),
                         limit=int(arguments.get("limit", 1000)),
                     )
-                elif name == "zotero_sync_pull":
-                    payload = sync_service.sync_remote_library(arguments["library_id"]).__dict__
                 elif name == "zotero_sync_discover":
                     payload = canonical_sync().discover_libraries()
                 elif name == "zotero_sync_pull":

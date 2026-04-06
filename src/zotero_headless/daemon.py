@@ -22,6 +22,7 @@ from .observability import (
     start_background_sync_run,
     write_runtime_state,
 )
+from .qmd import QmdAutoIndexer
 from .store import MirrorStore
 from .utils import ensure_dir
 
@@ -137,6 +138,7 @@ class BackgroundSyncWorker:
     def __init__(self, settings: Settings, canonical: CanonicalStore):
         self.settings = settings
         self.canonical = canonical
+        self.qmd_indexer = QmdAutoIndexer(settings)
         self.stop_event = threading.Event()
         self.thread: threading.Thread | None = None
 
@@ -169,7 +171,11 @@ class BackgroundSyncWorker:
         from .adapters.web_sync import CanonicalWebSyncAdapter
         from .web_api import ZoteroWebClient
 
-        adapter = CanonicalWebSyncAdapter(self.canonical, ZoteroWebClient(self.settings))
+        adapter = CanonicalWebSyncAdapter(
+            self.canonical,
+            ZoteroWebClient(self.settings),
+            qmd_indexer=self.qmd_indexer,
+        )
         discovered = adapter.discover_libraries()
         summary: dict[str, object] = {
             "libraries_discovered": len(discovered),

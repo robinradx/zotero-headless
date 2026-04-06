@@ -166,6 +166,15 @@ class FakeWebClient:
         return self.fulltext_payloads[item_key]
 
 
+class FakeQmdIndexer:
+    def __init__(self):
+        self.refreshes: list[str] = []
+
+    def refresh_canonical_library(self, store, library_id: str):
+        self.refreshes.append(library_id)
+        return {"enabled": True, "library_id": library_id}
+
+
 class CanonicalWebSyncAdapterTests(unittest.TestCase):
     def test_discover_libraries_populates_canonical_store(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -209,6 +218,23 @@ class CanonicalWebSyncAdapterTests(unittest.TestCase):
             entity = store.get_entity("user:123", EntityType.ITEM, "ABCD1234")
             self.assertEqual(entity["remote_version"], 5)
             self.assertTrue(entity["synced"])
+
+    def test_pull_library_triggers_qmd_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            store.upsert_library("user:123", name="demo-user", source="remote-sync")
+            client = FakeWebClient()
+            client.remote_items["ABCD1234"] = {
+                "key": "ABCD1234",
+                "version": 5,
+                "data": {"key": "ABCD1234", "version": 5, "itemType": "book", "title": "Remote"},
+            }
+            qmd_indexer = FakeQmdIndexer()
+            adapter = CanonicalWebSyncAdapter(store, client, qmd_indexer=qmd_indexer)
+
+            adapter.pull_library("user:123")
+
+            self.assertEqual(qmd_indexer.refreshes, ["user:123"])
 
     def test_pull_library_enriches_better_bibtex_metadata_from_extra(self):
         with tempfile.TemporaryDirectory() as tmp:

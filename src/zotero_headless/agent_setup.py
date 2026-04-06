@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ SUPPORTED_SKILL_TARGETS = (
     "codex",
     "opencode",
     "claude-code",
+    "claude-desktop",
     "gemini-cli",
 )
 USER_SCOPE_ONLY_TARGETS = {"codex", "claude-desktop", "gemini", "cline", "antigravity", "windsurf"}
@@ -296,7 +298,27 @@ Priorities:
 - Prefer the headless store and daemon runtime over direct file/database assumptions.
 - Use sync conflict tools before retrying remote mutations blindly.
 - For local desktop workflows, distinguish headless state from the Zotero desktop database and use the local adapter/apply flow.
-- For search/RAG tasks, prefer qmd export/query flows over ad hoc filesystem scans.
+- For search/RAG tasks, prefer qmd semantic search over ad hoc filesystem scans or hand-rolled file traversal.
+
+Routing policy:
+- Use qmd semantic search for exploratory retrieval:
+  - finding relevant papers on a topic
+  - retrieving related sources from natural-language prompts
+  - summarizing themes or building RAG context
+- Use direct item or collection reads through the API, CLI, or MCP when the request is deterministic:
+  - known library IDs, item keys, or collection keys
+  - exact metadata inspection
+  - exact list or get operations
+- Use direct mutation and sync commands for any create, update, delete, sync, conflict, or local-apply work.
+- Prefer the HTTP API over MCP when the agent can call HTTP directly and wants stable structured integration.
+- Prefer MCP when the client is already MCP-native and tool-use ergonomics are better there.
+- Do not use qmd semantic search when the task already names exact objects or requires authoritative current metadata.
+
+Recommended workflow:
+- Start with `zotero-headless capabilities` or `zotero-headless daemon status` when runtime shape is unclear.
+- Use `sync discover`, `sync pull`, and `sync push` to keep remote libraries current.
+- Use `sync conflicts` before retrying failed remote writes.
+- Treat qmd search as automatically maintained from dataset changes; query it directly instead of manually exporting first.
 
 High-value commands:
 - `zotero-headless capabilities`
@@ -322,6 +344,8 @@ def skill_target_path(target: str, *, home: Path | None = None) -> Path:
         return home / ".codex" / "skills" / SERVER_NAME / "SKILL.md"
     if target == "claude-code":
         return home / ".claude" / "skills" / SERVER_NAME / "SKILL.md"
+    if target == "claude-desktop":
+        return home / "Desktop" / f"{SERVER_NAME}-claude-desktop-skill.zip"
     if target == "gemini-cli":
         return home / ".gemini" / "skills" / SERVER_NAME / "SKILL.md"
     if target == "cline":
@@ -335,6 +359,32 @@ def skill_target_path(target: str, *, home: Path | None = None) -> Path:
     raise ValueError(f"Unsupported skill target: {target}")
 
 
+def _claude_desktop_skill_archive_payload() -> dict[str, str]:
+    return {
+        "name": "Zotero Headless",
+        "slug": SERVER_NAME,
+        "entrypoint": "SKILL.md",
+        "description": "Claude Desktop/manual-upload skill archive for zotero-headless.",
+    }
+
+
+def _claude_desktop_upload_instructions(path: Path) -> list[str]:
+    return [
+        f"Find the generated skill archive at: {path}",
+        "In Claude Desktop, open the Skills section and upload the archive.",
+        "You can also upload the same archive in the Claude web app on claude.ai.",
+    ]
+
+
+def _write_claude_desktop_skill_archive(path: Path) -> None:
+    ensure_dir(path.parent)
+    skill_body = skill_text("claude-desktop")
+    metadata = json.dumps(_claude_desktop_skill_archive_payload(), indent=2, sort_keys=True)
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("SKILL.md", skill_body)
+        zf.writestr("metadata.json", metadata)
+
+
 def install_skill(
     target: str,
     *,
@@ -343,11 +393,27 @@ def install_skill(
     if target not in SUPPORTED_SKILL_TARGETS:
         raise ValueError(f"Unsupported skill target: {target}")
     path = skill_target_path(target, home=home)
+    if target == "claude-desktop":
+        _write_claude_desktop_skill_archive(path)
+        return {
+            "target": target,
+            "installed": True,
+            "path": str(path),
+            "format": "zip",
+            "instructions": _claude_desktop_upload_instructions(path),
+        }
     _write_text(path, skill_text(target))
     return {"target": target, "installed": True, "path": str(path)}
 
 
 def export_skill(target: str) -> dict[str, Any]:
+    if target == "claude-desktop":
+        return {
+            "target": target,
+            "content": skill_text(target),
+            "format": "zip",
+            "archive_contents": ["SKILL.md", "metadata.json"],
+        }
     return {"target": target, "content": skill_text(target)}
 
 

@@ -33,6 +33,7 @@ SUPPORTED_SKILL_TARGETS = (
     "claude-desktop",
     "gemini-cli",
 )
+SUPPORTED_SKILL_VARIANTS = ("general", "daemon")
 USER_SCOPE_ONLY_TARGETS = {"codex", "claude-desktop", "gemini", "cline", "antigravity", "windsurf"}
 PROJECT_OR_USER_TARGETS = {"cursor"}
 PROJECT_ONLY_TARGETS = {"claude-code"}
@@ -287,48 +288,169 @@ def setup_list(settings: Settings, *, cwd: Path | None = None, home: Path | None
     return entries
 
 
-def skill_text(target: str) -> str:
+def _target_label(target: str) -> str:
+    labels = {
+        "codex": "Codex",
+        "claude-code": "Claude Code",
+        "claude-desktop": "Claude Desktop",
+        "gemini-cli": "Gemini CLI",
+        "cline": "Cline",
+        "antigravity": "Antigravity",
+        "openclaw": "OpenClaw",
+        "opencode": "OpenCode",
+    }
+    return labels.get(target, target)
+
+
+def _variant_label(variant: str) -> str:
+    labels = {
+        "general": "general runtime",
+        "daemon": "daemon runtime",
+    }
+    return labels.get(variant, variant)
+
+
+def _target_specific_notes(target: str) -> list[str]:
+    if target == "claude-desktop":
+        return [
+            "- This skill is uploaded manually into Claude Desktop or claude.ai; it does not configure MCP by itself.",
+            "- Prefer the HTTP API when you can reach a running `zotero-headless` daemon directly.",
+            "- Use MCP only after the separate Claude Desktop MCP config has been installed.",
+        ]
+    if target in {"codex", "claude-code", "cline", "antigravity", "openclaw", "opencode"}:
+        return [
+            "- This client is comfortable with MCP tool use. Prefer MCP for exact reads and mutations when the server is installed.",
+            "- If the client can also call HTTP directly, prefer the API for stable structured integrations or remote daemon access.",
+        ]
+    if target == "gemini-cli":
+        return [
+            "- Prefer the HTTP API for direct structured integrations when available.",
+            "- Use MCP when the Gemini environment is already configured for MCP tool calls and that is the easiest path.",
+        ]
+    return []
+
+
+def _variant_specific_notes(variant: str) -> list[str]:
+    if variant == "daemon":
+        return [
+            "- Assume a true headless deployment: no Zotero Desktop GUI, no local desktop assumptions, and API-first operations.",
+            "- Prefer the daemon HTTP API as the primary integration surface and use MCP as a client convenience layer.",
+            "- Treat remote sync, runtime observability, and background jobs as normal operational concerns, not exceptional ones.",
+            "- Only mention local desktop interoperability when the task explicitly involves a machine that also has Zotero Desktop installed.",
+        ]
+    return [
+        "- Use the headless store as the primary working state even when a local Zotero installation exists.",
+        "- Treat the local desktop adapter as an interoperability layer, not the default source of truth.",
+        "- Reach for local desktop import/apply only when local-only state or explicit desktop interoperability is actually needed.",
+    ]
+
+
+def skill_text(target: str, *, variant: str = "general") -> str:
     if target not in SUPPORTED_SKILL_TARGETS:
         raise ValueError(f"Unsupported skill target: {target}")
-    return """# Zotero Headless
+    if variant not in SUPPORTED_SKILL_VARIANTS:
+        raise ValueError(f"Unsupported skill variant: {variant}")
+    target_label = _target_label(target)
+    variant_label = _variant_label(variant)
+    target_notes = "\n".join(_target_specific_notes(target))
+    if target_notes:
+        target_notes = f"\nTarget-specific notes:\n{target_notes}\n"
+    variant_notes = "\n".join(_variant_specific_notes(variant))
+    if variant_notes:
+        variant_notes = f"\nVariant-specific notes:\n{variant_notes}\n"
+    return f"""# Zotero Headless
 
-Use this when working with a `zotero-headless` CLI, API, or MCP runtime.
+Use this when working with a `zotero-headless` CLI, API, or MCP runtime from {target_label}.
+Active skill variant: `{variant}` ({variant_label}).
 
-Priorities:
-- Prefer the headless store and daemon runtime over direct file/database assumptions.
-- Use sync conflict tools before retrying remote mutations blindly.
-- For local desktop workflows, distinguish headless state from the Zotero desktop database and use the local adapter/apply flow.
-- For search/RAG tasks, prefer qmd semantic search over ad hoc filesystem scans or hand-rolled file traversal.
+Core priorities:
+- Prefer the headless store and daemon runtime over direct filesystem or database assumptions.
+- Treat qmd semantic search as automatically maintained from dataset changes.
+- Use direct sync and conflict flows instead of retrying remote mutations blindly.
+- For local desktop workflows, distinguish headless state from the Zotero desktop database and use the local adapter/import/apply flow.
+
+Decision table:
+- Exploratory retrieval, topic discovery, related-work lookup, RAG context building:
+  - Use qmd semantic search.
+- Exact metadata lookup with a known library ID, item key, or collection key:
+  - Use direct API, CLI, or MCP reads.
+- Create, update, delete, sync, conflict resolution, or local apply work:
+  - Use direct mutation and sync commands, never qmd.
+- Stable structured integration with a reachable daemon:
+  - Prefer the HTTP API.
+- MCP-native tool calling environment:
+  - Prefer MCP when the client already handles tool use well.
 
 Routing policy:
-- Use qmd semantic search for exploratory retrieval:
+- Use qmd semantic search for:
   - finding relevant papers on a topic
   - retrieving related sources from natural-language prompts
-  - summarizing themes or building RAG context
-- Use direct item or collection reads through the API, CLI, or MCP when the request is deterministic:
-  - known library IDs, item keys, or collection keys
+  - summarizing themes across a library
+  - building retrieval context before writing
+- Use direct reads through API, CLI, or MCP for:
   - exact metadata inspection
-  - exact list or get operations
-- Use direct mutation and sync commands for any create, update, delete, sync, conflict, or local-apply work.
+  - exact list/get operations
+  - authoritative current state
+  - keyed parent/child traversal
+- Use direct mutation and sync commands for:
+  - item and collection create/update/delete
+  - sync discover, pull, push
+  - conflict resolution
+  - local desktop import, plan-apply, and apply
 - Prefer the HTTP API over MCP when the agent can call HTTP directly and wants stable structured integration.
 - Prefer MCP when the client is already MCP-native and tool-use ergonomics are better there.
 - Do not use qmd semantic search when the task already names exact objects or requires authoritative current metadata.
-
+{variant_notes}
+{target_notes}
 Recommended workflow:
-- Start with `zotero-headless capabilities` or `zotero-headless daemon status` when runtime shape is unclear.
-- Use `sync discover`, `sync pull`, and `sync push` to keep remote libraries current.
-- Use `sync conflicts` before retrying failed remote writes.
-- Treat qmd search as automatically maintained from dataset changes; query it directly instead of manually exporting first.
+1. Start with `zhl capabilities` or `zhl daemon status` when runtime shape is unclear.
+2. If remote libraries are involved, run `zhl sync discover` and `zhl sync pull --library <library_id>` before deeper work.
+3. Choose retrieval mode:
+   - qmd for exploratory retrieval
+   - API/MCP/CLI for exact reads
+4. For writes, use direct mutation commands and then `zhl sync push --library <library_id>` when remote sync is required.
+5. If a write fails, inspect `zhl sync conflicts --library <library_id>` before retrying.
+
+Common recipes:
+- Find papers about a topic:
+  - `zhl qmd query "papers about retrieval augmented generation"`
+- Fetch an exact item:
+  - use API or MCP item-get tools with the known `library_id` and `item_key`
+- Sync a remote library before exact reads:
+  - `zhl sync discover`
+  - `zhl sync pull --library user:123456`
+- Resolve remote write issues:
+  - `zhl sync conflicts --library user:123456`
+- Desktop Zotero interoperability:
+  - `zhl local import`
+  - `zhl local plan-apply --library local:1`
+  - `zhl local apply --library local:1`
+- Headless daemon workflow:
+  - `zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300`
+- Daemon observability:
+  - `curl -s http://127.0.0.1:8787/daemon/runtime`
+  - `curl -s http://127.0.0.1:8787/daemon/jobs`
+  - `curl -s http://127.0.0.1:8787/metrics`
+
+Anti-patterns:
+- Do not scan exported markdown directly when qmd can answer the retrieval question.
+- Do not use qmd for exact authoritative metadata lookups.
+- Do not mutate the Zotero desktop database directly outside the supported local apply flow.
+- Do not use mirror sync paths unless the task explicitly requires mirror-backed compatibility behavior.
+- Do not retry failed remote writes blindly; inspect conflicts first.
 
 High-value commands:
-- `zotero-headless capabilities`
-- `zotero-headless daemon status`
-- `zotero-headless sync discover`
-- `zotero-headless sync pull --library <library_id>`
-- `zotero-headless sync push --library <library_id>`
-- `zotero-headless sync conflicts --library <library_id>`
+- `zhl capabilities`
+- `zhl daemon status`
+- `zhl sync discover`
+- `zhl sync pull --library <library_id>`
+- `zhl sync push --library <library_id>`
+- `zhl sync conflicts --library <library_id>`
+- `zhl qmd query "<topic>"`
 
-When the daemon is running, useful runtime endpoints are:
+Useful daemon endpoints:
+- `/health`
+- `/capabilities`
 - `/daemon/status`
 - `/daemon/runtime`
 - `/daemon/jobs`
@@ -336,16 +458,19 @@ When the daemon is running, useful runtime endpoints are:
 """
 
 
-def skill_target_path(target: str, *, home: Path | None = None) -> Path:
+def skill_target_path(target: str, *, home: Path | None = None, variant: str = "general") -> Path:
     if target not in SUPPORTED_SKILL_TARGETS:
         raise ValueError(f"Unsupported skill target: {target}")
+    if variant not in SUPPORTED_SKILL_VARIANTS:
+        raise ValueError(f"Unsupported skill variant: {variant}")
     home = (home or Path.home()).expanduser()
     if target == "codex":
         return home / ".codex" / "skills" / SERVER_NAME / "SKILL.md"
     if target == "claude-code":
         return home / ".claude" / "skills" / SERVER_NAME / "SKILL.md"
     if target == "claude-desktop":
-        return home / "Desktop" / f"{SERVER_NAME}-claude-desktop-skill.zip"
+        suffix = "" if variant == "general" else f"-{variant}"
+        return home / "Desktop" / f"{SERVER_NAME}-claude-desktop{suffix}-skill.zip"
     if target == "gemini-cli":
         return home / ".gemini" / "skills" / SERVER_NAME / "SKILL.md"
     if target == "cline":
@@ -376,9 +501,9 @@ def _claude_desktop_upload_instructions(path: Path) -> list[str]:
     ]
 
 
-def _write_claude_desktop_skill_archive(path: Path) -> None:
+def _write_claude_desktop_skill_archive(path: Path, *, variant: str) -> None:
     ensure_dir(path.parent)
-    skill_body = skill_text("claude-desktop")
+    skill_body = skill_text("claude-desktop", variant=variant)
     metadata = json.dumps(_claude_desktop_skill_archive_payload(), indent=2, sort_keys=True)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("SKILL.md", skill_body)
@@ -389,32 +514,39 @@ def install_skill(
     target: str,
     *,
     home: Path | None = None,
+    variant: str = "general",
 ) -> dict[str, Any]:
     if target not in SUPPORTED_SKILL_TARGETS:
         raise ValueError(f"Unsupported skill target: {target}")
-    path = skill_target_path(target, home=home)
+    if variant not in SUPPORTED_SKILL_VARIANTS:
+        raise ValueError(f"Unsupported skill variant: {variant}")
+    path = skill_target_path(target, home=home, variant=variant)
     if target == "claude-desktop":
-        _write_claude_desktop_skill_archive(path)
+        _write_claude_desktop_skill_archive(path, variant=variant)
         return {
             "target": target,
+            "variant": variant,
             "installed": True,
             "path": str(path),
             "format": "zip",
             "instructions": _claude_desktop_upload_instructions(path),
         }
-    _write_text(path, skill_text(target))
-    return {"target": target, "installed": True, "path": str(path)}
+    _write_text(path, skill_text(target, variant=variant))
+    return {"target": target, "variant": variant, "installed": True, "path": str(path)}
 
 
-def export_skill(target: str) -> dict[str, Any]:
+def export_skill(target: str, *, variant: str = "general") -> dict[str, Any]:
+    if variant not in SUPPORTED_SKILL_VARIANTS:
+        raise ValueError(f"Unsupported skill variant: {variant}")
     if target == "claude-desktop":
         return {
             "target": target,
-            "content": skill_text(target),
+            "variant": variant,
+            "content": skill_text(target, variant=variant),
             "format": "zip",
             "archive_contents": ["SKILL.md", "metadata.json"],
         }
-    return {"target": target, "content": skill_text(target)}
+    return {"target": target, "variant": variant, "content": skill_text(target, variant=variant)}
 
 
 def doctor_report(
@@ -443,5 +575,8 @@ def doctor_report(
         },
         "daemon": daemon.to_dict(),
         "setup_targets": setup_list(settings, cwd=cwd, home=home),
-        "skill_targets": [{"target": target, "install_supported": True} for target in SUPPORTED_SKILL_TARGETS],
+        "skill_targets": [
+            {"target": target, "install_supported": True, "variants": list(SUPPORTED_SKILL_VARIANTS)}
+            for target in SUPPORTED_SKILL_TARGETS
+        ],
     }

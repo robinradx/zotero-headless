@@ -7,6 +7,7 @@ from pathlib import Path
 from .agent_setup import (
     SUPPORTED_SETUP_TARGETS,
     SUPPORTED_SKILL_TARGETS,
+    SUPPORTED_SKILL_VARIANTS,
     export_skill,
     doctor_report,
     install_mcp_setup,
@@ -83,12 +84,16 @@ def build_parser() -> argparse.ArgumentParser:
     skill_sub = skill.add_subparsers(dest="skill_command", required=True)
     skill_add = skill_sub.add_parser("add")
     skill_add.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_add.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_install = skill_sub.add_parser("install")
     skill_install.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_install.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_update = skill_sub.add_parser("update")
     skill_update.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_update.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_export = skill_sub.add_parser("export")
     skill_export.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_export.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
 
     sub.add_parser("doctor")
 
@@ -327,10 +332,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "skill":
         if args.skill_command in {"add", "install", "update"}:
-            _print(install_skill(args.tool))
+            _print(install_skill(args.tool, variant=args.variant))
             return 0
         if args.skill_command == "export":
-            _print(export_skill(args.tool))
+            _print(export_skill(args.tool, variant=args.variant))
             return 0
 
     if args.command == "doctor":

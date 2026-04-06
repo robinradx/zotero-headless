@@ -162,6 +162,7 @@ class AgentSetupTests(unittest.TestCase):
             skill_path = home / ".codex" / "skills" / SERVER_NAME / "SKILL.md"
             self.assertEqual(result["path"], str(skill_path))
             self.assertIn("Zotero Headless", skill_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["variant"], "general")
 
     def test_install_skill_for_all_supported_targets_writes_skill_file(self):
         targets = ("cline", "antigravity", "openclaw", "codex", "opencode", "claude-code", "gemini-cli")
@@ -183,6 +184,7 @@ class AgentSetupTests(unittest.TestCase):
             archive_path = home / "Desktop" / f"{SERVER_NAME}-claude-desktop-skill.zip"
             self.assertEqual(result["path"], str(archive_path))
             self.assertEqual(result["format"], "zip")
+            self.assertEqual(result["variant"], "general")
             self.assertTrue(archive_path.exists())
             self.assertTrue(any("Claude Desktop" in line for line in result["instructions"]))
             with zipfile.ZipFile(archive_path) as zf:
@@ -191,22 +193,58 @@ class AgentSetupTests(unittest.TestCase):
                 metadata = json.loads(zf.read("metadata.json").decode("utf-8"))
                 self.assertEqual(metadata["slug"], SERVER_NAME)
 
+    def test_install_daemon_variant_for_claude_desktop_uses_distinct_archive_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+
+            result = install_skill("claude-desktop", home=home, variant="daemon")
+
+            archive_path = home / "Desktop" / f"{SERVER_NAME}-claude-desktop-daemon-skill.zip"
+            self.assertEqual(result["path"], str(archive_path))
+            self.assertEqual(result["variant"], "daemon")
+            self.assertTrue(archive_path.exists())
+            with zipfile.ZipFile(archive_path) as zf:
+                body = zf.read("SKILL.md").decode("utf-8")
+                self.assertIn("Active skill variant: `daemon`", body)
+                self.assertIn("Assume a true headless deployment", body)
+
     def test_export_skill_returns_content(self):
         exported = export_skill("codex")
         self.assertEqual(exported["target"], "codex")
+        self.assertEqual(exported["variant"], "general")
         self.assertIn("sync conflicts", exported["content"])
-        self.assertIn("Use qmd semantic search for exploratory retrieval", exported["content"])
+        self.assertIn("Routing policy:", exported["content"])
+        self.assertIn("- Use qmd semantic search for:", exported["content"])
         self.assertIn("Prefer the HTTP API over MCP", exported["content"])
         self.assertIn("Do not use qmd semantic search when the task already names exact objects", exported["content"])
         self.assertIn("automatically maintained from dataset changes", exported["content"])
         self.assertNotIn("Use `qmd export` before qmd queries", exported["content"])
+        self.assertIn("Decision table:", exported["content"])
+        self.assertIn("Common recipes:", exported["content"])
+        self.assertIn("Anti-patterns:", exported["content"])
+        self.assertIn("This client is comfortable with MCP tool use", exported["content"])
+        self.assertIn("Do not use mirror sync paths unless the task explicitly requires mirror-backed compatibility behavior.", exported["content"])
+        self.assertIn("Active skill variant: `general`", exported["content"])
+        self.assertIn("Treat the local desktop adapter as an interoperability layer", exported["content"])
+
+    def test_export_daemon_variant_emphasizes_headless_constraints(self):
+        exported = export_skill("codex", variant="daemon")
+        self.assertEqual(exported["target"], "codex")
+        self.assertEqual(exported["variant"], "daemon")
+        self.assertIn("Active skill variant: `daemon`", exported["content"])
+        self.assertIn("Assume a true headless deployment", exported["content"])
+        self.assertIn("Prefer the daemon HTTP API as the primary integration surface", exported["content"])
+        self.assertIn("Daemon observability:", exported["content"])
 
     def test_export_skill_for_claude_desktop_describes_archive(self):
         exported = export_skill("claude-desktop")
         self.assertEqual(exported["target"], "claude-desktop")
+        self.assertEqual(exported["variant"], "general")
         self.assertEqual(exported["format"], "zip")
         self.assertEqual(exported["archive_contents"], ["SKILL.md", "metadata.json"])
-        self.assertIn("Use qmd semantic search for exploratory retrieval", exported["content"])
+        self.assertIn("- Use qmd semantic search for:", exported["content"])
+        self.assertIn("This skill is uploaded manually into Claude Desktop or claude.ai", exported["content"])
+        self.assertIn("Prefer the HTTP API when you can reach a running `zotero-headless` daemon directly.", exported["content"])
 
     def test_doctor_report_includes_setup_targets_and_cli_checks(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -215,6 +253,7 @@ class AgentSetupTests(unittest.TestCase):
             self.assertIn("cli", report)
             self.assertIn("setup_targets", report)
             self.assertIn("daemon", report)
+            self.assertTrue(all("variants" in entry for entry in report["skill_targets"]))
 
 
 if __name__ == "__main__":

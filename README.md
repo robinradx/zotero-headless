@@ -307,6 +307,9 @@ Release maintenance:
 ```text
 make version VERSION=0.3.1
 make release-check
+make tag VERSION=0.3.1
+make push-tag VERSION=0.3.1
+make release VERSION=0.3.1
 ```
 
 API exposure works in two modes:

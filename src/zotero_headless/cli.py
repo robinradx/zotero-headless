@@ -20,6 +20,19 @@ from .api import serve_api
 from .adapters.local_desktop import LocalDesktopAdapter
 from .adapters.web_sync import CanonicalWebSyncAdapter
 from .capabilities import get_capabilities
+from .cli_ui import (
+    render_config_payload,
+    render_daemon_command,
+    render_daemon_status,
+    render_doctor_report,
+    render_install_result,
+    render_setup_list,
+    render_setup_result,
+    render_setup_target,
+    render_update_plan,
+    render_update_result,
+    render_version_payload,
+)
 from .config import Settings, load_settings, save_settings
 from .core import CanonicalStore, ChangeType, EntityType
 from .daemon import build_daemon_command, build_runtime_command, current_daemon_status, serve_daemon_runtime
@@ -39,8 +52,19 @@ def _print(payload) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True))
 
 
+def _emit(payload, *, as_json: bool = False, renderer=None) -> None:
+    if not as_json and renderer is not None:
+        print(renderer(payload))
+        return
+    _print(payload)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="zotero-headless")
+    parser = argparse.ArgumentParser(
+        prog="zotero-headless",
+        description="Headless Zotero-compatible runtime with CLI, API, MCP, local desktop interoperability, and web sync.",
+    )
+    parser.add_argument("--json", action="store_true", help="Emit JSON output for human-facing commands.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     config = sub.add_parser("config")
@@ -238,7 +262,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.config_command == "autodiscover":
             from .autodiscover import autodiscover_settings
 
-            _print({"autodiscovered": autodiscover_settings(settings).to_dict(), "settings": settings.as_dict()})
+            _emit(
+                {"autodiscovered": autodiscover_settings(settings).to_dict(), "settings": settings.as_dict()},
+                as_json=args.json,
+                renderer=render_config_payload,
+            )
             return 0
         if args.config_command == "init":
             updated = Settings(
@@ -259,22 +287,28 @@ def main(argv: list[str] | None = None) -> int:
                 daemon_port=settings.daemon_port,
             )
             path = save_settings(updated)
-            _print({"config": str(path), "settings": updated.as_dict()})
+            _emit(
+                {"config": str(path), "settings": updated.as_dict()},
+                as_json=args.json,
+                renderer=render_setup_result,
+            )
             return 0
         if args.config_command == "wizard":
             result = run_setup_wizard(settings)
             path = save_settings(result.settings)
-            _print(
+            _emit(
                 {
                     "config": str(path),
                     "settings": result.settings.as_dict(),
                     "discovered_libraries": result.discovered_libraries,
                     "selected_remote_libraries": result.selected_library_ids,
-                }
+                },
+                as_json=args.json,
+                renderer=render_setup_result,
             )
             return 0
         if args.config_command == "show":
-            _print(settings.as_dict())
+            _emit(settings.as_dict(), as_json=args.json, renderer=render_config_payload)
             return 0
 
     if args.command == "capabilities":
@@ -283,15 +317,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "version":
-        _print(version_payload())
+        _emit(version_payload(), as_json=args.json, renderer=render_version_payload)
         return 0
 
     if args.command == "update":
         plan = build_update_plan()
         if args.check:
-            _print({"plan": plan.to_dict()})
+            _emit({"plan": plan.to_dict()}, as_json=args.json, renderer=render_update_plan)
             return 0
-        _print(run_update(plan))
+        _emit(run_update(plan), as_json=args.json, renderer=render_update_result)
         return 0
 
     if args.command == "setup":
@@ -307,32 +341,50 @@ def main(argv: list[str] | None = None) -> int:
             }[args.setup_command]
             result = run_setup_wizard(settings, mode=mode)
             path = save_settings(result.settings)
-            _print(
+            _emit(
                 {
                     "config": str(path),
                     "autodiscovered": result.autodiscovered,
                     "settings": result.settings.as_dict(),
                     "discovered_libraries": result.discovered_libraries,
                     "selected_remote_libraries": result.selected_library_ids,
-                }
+                },
+                as_json=args.json,
+                renderer=render_setup_result,
             )
             return 0
         if args.setup_command == "list":
-            _print({"targets": setup_list(settings, cwd=cwd)})
+            _emit({"targets": setup_list(settings, cwd=cwd)}, as_json=args.json, renderer=lambda payload: render_setup_list(payload["targets"]))
             return 0
         if args.setup_command == "show":
-            _print(inspect_setup_target(args.tool, settings, cwd=cwd, scope=args.scope))
+            _emit(
+                inspect_setup_target(args.tool, settings, cwd=cwd, scope=args.scope),
+                as_json=args.json,
+                renderer=render_setup_target,
+            )
             return 0
         if args.setup_command == "add":
-            _print(install_mcp_setup(args.tool, settings, cwd=cwd, scope=args.scope))
+            _emit(
+                install_mcp_setup(args.tool, settings, cwd=cwd, scope=args.scope),
+                as_json=args.json,
+                renderer=lambda payload: render_install_result(payload, heading="MCP setup written"),
+            )
             return 0
         if args.setup_command == "remove":
-            _print(remove_mcp_setup(args.tool, cwd=cwd, scope=args.scope))
+            _emit(
+                remove_mcp_setup(args.tool, cwd=cwd, scope=args.scope),
+                as_json=args.json,
+                renderer=lambda payload: render_install_result(payload, heading="MCP setup removed"),
+            )
             return 0
 
     if args.command == "skill":
         if args.skill_command in {"add", "install", "update"}:
-            _print(install_skill(args.tool, variant=args.variant))
+            _emit(
+                install_skill(args.tool, variant=args.variant),
+                as_json=args.json,
+                renderer=lambda payload: render_install_result(payload, heading="Skill installed"),
+            )
             return 0
         if args.skill_command == "export":
             _print(export_skill(args.tool, variant=args.variant))
@@ -340,21 +392,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "doctor":
         settings = load_settings(ensure_dirs=False)
-        _print(doctor_report(settings, cwd=Path.cwd()))
+        _emit(doctor_report(settings, cwd=Path.cwd()), as_json=args.json, renderer=render_doctor_report)
         return 0
 
     if args.command == "daemon":
         settings = load_settings(ensure_dirs=False)
         if args.daemon_command == "status":
-            _print(current_daemon_status(settings).to_dict())
+            _emit(current_daemon_status(settings).to_dict(), as_json=args.json, renderer=render_daemon_status)
             return 0
         if args.daemon_command == "command":
-            _print(
+            _emit(
                 {
                     "runtime_argv": build_runtime_command(settings),
                     "desktop_helper_argv": build_daemon_command(settings),
                     "local_api_url": f"http://{settings.daemon_host}:{settings.daemon_port}/api/",
-                }
+                },
+                as_json=args.json,
+                renderer=render_daemon_command,
             )
             return 0
         if args.daemon_command == "serve":

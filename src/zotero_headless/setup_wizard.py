@@ -6,6 +6,7 @@ from typing import Literal
 from typing import Callable
 
 from .autodiscover import autodiscover_settings
+from .cli_ui import prompt_yes_no
 from .config import Settings
 from .core import CanonicalStore
 from .utils import format_library_id
@@ -43,10 +44,13 @@ def _prompt_value(
     label: str,
     *,
     default: str | None = None,
+    none_values: set[str] | None = None,
     input_fn: PromptFn = input,
 ) -> str | None:
     suffix = f" [{default}]" if default else ""
     value = input_fn(f"{label}{suffix}: ").strip()
+    if none_values and value.lower() in none_values:
+        return None
     if value:
         return value
     return default
@@ -63,6 +67,26 @@ def _prompt_secret(
     if value:
         return value
     return default
+
+
+def _prompt_numbered_choice(
+    label: str,
+    options: list[str],
+    *,
+    default_index: int | None = None,
+    input_fn: PromptFn = input,
+) -> int:
+    while True:
+        suffix = f" [{default_index + 1}]" if default_index is not None else ""
+        raw = input_fn(f"{label}{suffix}: ").strip()
+        if not raw and default_index is not None:
+            return default_index
+        try:
+            selected = int(raw)
+        except ValueError:
+            continue
+        if 1 <= selected <= len(options):
+            return selected - 1
 
 
 def _parse_selection(raw: str, total: int, *, default_all: bool = True) -> list[int]:
@@ -91,6 +115,86 @@ def _selection_prompt_suffix(default_indices: list[int], libraries: list[WizardL
     if not default_indices:
         return "all" if libraries else "none"
     return ",".join(str(index + 1) for index in default_indices)
+
+
+def _prompt_library_selection(
+    libraries: list[WizardLibrary],
+    *,
+    default_indices: list[int],
+    has_existing_selection: bool,
+    input_fn: PromptFn = input,
+) -> list[int]:
+    if len(libraries) == 1:
+        return [0]
+
+    if has_existing_selection and default_indices:
+        keep_default = prompt_yes_no(
+            "Use the currently selected remote libraries",
+            default=True,
+            input_fn=input_fn,
+        )
+        if keep_default:
+            return default_indices
+    if not has_existing_selection:
+        use_all = prompt_yes_no(
+            "Configure all discovered remote libraries",
+            default=True,
+            input_fn=input_fn,
+        )
+        if use_all:
+            return list(range(len(libraries)))
+
+    while True:
+        raw = input_fn(
+            f"Remote libraries to configure [all, none, or comma-separated numbers; default: {_selection_prompt_suffix(default_indices, libraries)}]: "
+        )
+        try:
+            selected = _parse_selection(raw, len(libraries), default_all=not bool(default_indices))
+        except ValueError:
+            continue
+        if not raw.strip():
+            return default_indices or list(range(len(libraries)))
+        return selected
+
+
+def _prompt_default_library(
+    libraries: list[WizardLibrary],
+    *,
+    selected_indices: list[int],
+    account_changed: bool,
+    existing: Settings,
+    input_fn: PromptFn = input,
+) -> str | None:
+    if not selected_indices:
+        return None
+    selected_library_ids = [libraries[index].library_id for index in selected_indices]
+    if len(selected_indices) == 1:
+        selected = libraries[selected_indices[0]]
+        print(f"Using {selected.name} ({selected.library_id}) as the default remote library.")
+        return selected.library_id
+
+    previous_default = None if account_changed else existing.default_library_id
+    fallback = previous_default if previous_default in selected_library_ids else next(
+        (libraries[index].library_id for index in selected_indices if libraries[index].kind == "user"),
+        selected_library_ids[0],
+    )
+
+    print("\nDefault remote library:")
+    default_index = 0
+    for display_index, library_index in enumerate(selected_indices, start=1):
+        library = libraries[library_index]
+        marker = " default" if library.library_id == fallback else ""
+        print(f"  {display_index}. {library.name} ({library.library_id}){marker}")
+        if library.library_id == fallback:
+            default_index = display_index - 1
+
+    chosen_index = _prompt_numbered_choice(
+        "Choose the default remote library",
+        [libraries[index].library_id for index in selected_indices],
+        default_index=default_index,
+        input_fn=input_fn,
+    )
+    return libraries[selected_indices[chosen_index]].library_id
 
 
 def _apply_base_settings(existing: Settings) -> Settings:
@@ -171,27 +275,51 @@ def run_setup_wizard(
 ) -> WizardResult:
     autodiscovered = autodiscover_settings(existing)
     updated = _apply_base_settings(existing)
+    print("Starting zotero-headless setup.")
 
     if mode in {"full", "local"}:
-        updated.data_dir = _prompt_value("Zotero data directory", default=autodiscovered.data_dir, input_fn=input_fn)
-        updated.zotero_bin = _prompt_value(
-            "Zotero desktop binary (optional)",
-            default=autodiscovered.zotero_bin,
-            input_fn=input_fn,
-        )
+        if mode == "full" and autodiscovered.data_dir:
+            updated.data_dir = autodiscovered.data_dir
+            print(f"Using autodiscovered Zotero data directory: {autodiscovered.data_dir}")
+        else:
+            updated.data_dir = _prompt_value(
+                "Zotero data directory for local desktop interoperability (optional; enter 'skip' to disable)",
+                default=autodiscovered.data_dir,
+                none_values={"skip", "none", "disable", "disabled"},
+                input_fn=input_fn,
+            )
+        if mode == "full" and autodiscovered.zotero_bin:
+            updated.zotero_bin = autodiscovered.zotero_bin
+            print(f"Using autodiscovered Zotero desktop binary: {autodiscovered.zotero_bin}")
+        else:
+            updated.zotero_bin = _prompt_value(
+                "Zotero desktop binary (optional)",
+                default=autodiscovered.zotero_bin,
+                input_fn=input_fn,
+            )
 
+    configure_remote = mode in {"account", "libraries"}
     if mode in {"full", "account", "libraries"}:
-        updated.api_base = _prompt_value("Zotero API base", default=existing.api_base, input_fn=input_fn) or existing.api_base
-        updated.api_key = _prompt_secret(
-            "Zotero API key (leave blank for local-only setup)",
-            default=existing.api_key,
-            secret_fn=secret_fn,
-        )
+        if mode == "full":
+            configure_remote = prompt_yes_no(
+                "Configure Zotero web sync now",
+                default=bool(existing.api_key),
+                input_fn=input_fn,
+            )
+        if configure_remote:
+            updated.api_base = _prompt_value("Zotero API base", default=existing.api_base, input_fn=input_fn) or existing.api_base
+            updated.api_key = _prompt_secret(
+                "Zotero API key",
+                default=existing.api_key,
+                secret_fn=secret_fn,
+            )
+        else:
+            updated.api_key = None
 
     discovered_payloads: list[dict[str, object]] = []
     selected_library_ids: list[str] = []
 
-    if mode in {"full", "account", "libraries"} and updated.api_key:
+    if mode in {"full", "account", "libraries"} and configure_remote and updated.api_key:
         user_id, discovered = _discover_remote_libraries(updated, client_factory=client_factory)
         account_changed = existing.user_id not in {None, user_id}
         updated.user_id = user_id
@@ -206,27 +334,21 @@ def run_setup_wizard(
                 writable = "writable" if library.editable else "read-only"
                 selected = " selected" if (idx - 1) in default_indices else ""
                 print(f"  {idx}. {library.name} ({library.library_id}, {suffix}, {writable}{selected})")
-            raw = input_fn(
-                f"\nRemote libraries to configure [all, none, or comma-separated numbers; default: {_selection_prompt_suffix(default_indices, discovered)}]: "
+            selected_indices = _prompt_library_selection(
+                discovered,
+                default_indices=default_indices,
+                has_existing_selection=bool(existing_selection),
+                input_fn=input_fn,
             )
-            selected_indices = _parse_selection(raw, len(discovered), default_all=not bool(existing_selection))
-            if not raw.strip():
-                selected_indices = default_indices
             selected_library_ids = [discovered[index].library_id for index in selected_indices]
             updated.remote_library_ids = selected_library_ids
-            default_library = None
-            if selected_library_ids:
-                previous_default = None if account_changed else existing.default_library_id
-                fallback = previous_default if previous_default in selected_library_ids else next(
-                    (library.library_id for library in discovered if library.kind == "user" and library.library_id in selected_library_ids),
-                    selected_library_ids[0],
-                )
-                default_library = _prompt_value(
-                    "Default remote library",
-                    default=fallback,
-                    input_fn=input_fn,
-                )
-            updated.default_library_id = default_library
+            updated.default_library_id = _prompt_default_library(
+                discovered,
+                selected_indices=selected_indices,
+                account_changed=account_changed,
+                existing=existing,
+                input_fn=input_fn,
+            )
             discovered_payloads = _seed_canonical_libraries(updated, discovered)
         else:
             updated.remote_library_ids = []

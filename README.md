@@ -140,7 +140,9 @@ Run the setup flow:
 zhl setup start
 ```
 
-`setup start` tries autodiscovery first and then falls back to prompts for anything still missing.
+`setup start` tries autodiscovery first, uses standard local Zotero paths automatically when it finds them, and only prompts for values that are still missing.
+
+Interactive commands now default to human-readable output. If you want script-friendly payloads for setup, version, update, doctor, or daemon status commands, add `--json`.
 
 Autodiscovery looks for:
 
@@ -150,7 +152,8 @@ Autodiscovery looks for:
 
 Then the wizard will:
 
-- ask for your local Zotero data directory
+- tell you when it autodiscovers a standard local Zotero setup, and only ask for local desktop paths when it cannot infer them or when you explicitly reconfigure them
+- use explicit confirmation prompts such as `[y/N]` and `[Y/n]` where a yes-or-no decision is needed
 - ask for your Zotero API key only when web sync is needed
 - discover your personal library and available group libraries
 - let you choose which remote libraries to configure
@@ -300,16 +303,13 @@ Check version and update:
 zhl version
 zhl update --check
 zhl update
+zhl --json doctor
 ```
 
 Release maintenance:
 
 ```text
-make version VERSION=0.3.1
-make release-check
-make tag VERSION=0.3.1
-make push-tag VERSION=0.3.1
-make release VERSION=0.3.1
+make release VERSION=0.4.0
 ```
 
 API exposure works in two modes:

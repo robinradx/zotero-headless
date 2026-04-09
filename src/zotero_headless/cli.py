@@ -27,6 +27,7 @@ from .api import serve_api
 from .adapters.local_desktop import LocalDesktopAdapter
 from .adapters.web_sync import CanonicalWebSyncAdapter
 from .capabilities import get_capabilities
+from .citations import CitationExportClient
 from .cli_ui import (
     render_config_payload,
     render_daemon_command,
@@ -65,11 +66,13 @@ skill_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Ins
 daemon_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Inspect or run the daemon runtime.")
 sync_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Human-friendly remote sync commands.")
 local_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Human-friendly local desktop interoperability commands.")
+citations_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Manage the auto-generated citations database export.")
 app.add_typer(setup_app, name="setup")
 app.add_typer(skill_app, name="skill")
 app.add_typer(daemon_app, name="daemon")
 app.add_typer(sync_app, name="sync")
 app.add_typer(local_app, name="local")
+app.add_typer(citations_app, name="citations")
 
 console = Console()
 
@@ -104,6 +107,17 @@ def _emit(ctx: typer.Context, payload, *, renderer=None, title: str | None = Non
 
 def _human_settings(*, ensure_dirs: bool = True) -> Settings:
     return load_settings(ensure_dirs=ensure_dirs)
+
+
+def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None, discovered_libraries=None, selected_remote_libraries=None) -> dict[str, object]:
+    return {
+        "config": str(config_path),
+        "autodiscovered": autodiscovered or {},
+        "settings": settings.as_dict(),
+        "citation_export_path": str(settings.resolved_citation_export_path()),
+        "discovered_libraries": discovered_libraries or [],
+        "selected_remote_libraries": selected_remote_libraries or [],
+    }
 
 
 def _runtime_services(settings: Settings):
@@ -200,13 +214,13 @@ def setup_start(ctx: typer.Context) -> None:
     path = save_settings(result.settings)
     _emit(
         ctx,
-        {
-            "config": str(path),
-            "autodiscovered": result.autodiscovered,
-            "settings": result.settings.as_dict(),
-            "discovered_libraries": result.discovered_libraries,
-            "selected_remote_libraries": result.selected_library_ids,
-        },
+        _setup_payload(
+            path,
+            result.settings,
+            autodiscovered=result.autodiscovered,
+            discovered_libraries=result.discovered_libraries,
+            selected_remote_libraries=result.selected_library_ids,
+        ),
         renderer=render_setup_result,
         title="Setup",
     )
@@ -219,13 +233,13 @@ def setup_account(ctx: typer.Context) -> None:
     path = save_settings(result.settings)
     _emit(
         ctx,
-        {
-            "config": str(path),
-            "autodiscovered": result.autodiscovered,
-            "settings": result.settings.as_dict(),
-            "discovered_libraries": result.discovered_libraries,
-            "selected_remote_libraries": result.selected_library_ids,
-        },
+        _setup_payload(
+            path,
+            result.settings,
+            autodiscovered=result.autodiscovered,
+            discovered_libraries=result.discovered_libraries,
+            selected_remote_libraries=result.selected_library_ids,
+        ),
         renderer=render_setup_result,
         title="Setup account",
     )
@@ -238,13 +252,13 @@ def setup_libraries(ctx: typer.Context) -> None:
     path = save_settings(result.settings)
     _emit(
         ctx,
-        {
-            "config": str(path),
-            "autodiscovered": result.autodiscovered,
-            "settings": result.settings.as_dict(),
-            "discovered_libraries": result.discovered_libraries,
-            "selected_remote_libraries": result.selected_library_ids,
-        },
+        _setup_payload(
+            path,
+            result.settings,
+            autodiscovered=result.autodiscovered,
+            discovered_libraries=result.discovered_libraries,
+            selected_remote_libraries=result.selected_library_ids,
+        ),
         renderer=render_setup_result,
         title="Setup libraries",
     )
@@ -257,13 +271,13 @@ def setup_local(ctx: typer.Context) -> None:
     path = save_settings(result.settings)
     _emit(
         ctx,
-        {
-            "config": str(path),
-            "autodiscovered": result.autodiscovered,
-            "settings": result.settings.as_dict(),
-            "discovered_libraries": result.discovered_libraries,
-            "selected_remote_libraries": result.selected_library_ids,
-        },
+        _setup_payload(
+            path,
+            result.settings,
+            autodiscovered=result.autodiscovered,
+            discovered_libraries=result.discovered_libraries,
+            selected_remote_libraries=result.selected_library_ids,
+        ),
         renderer=render_setup_result,
         title="Setup local",
     )
@@ -439,6 +453,76 @@ def local_apply_command(
     _, _, _, _, _, local_adapter = _runtime_services(settings)
     payload = local_adapter.apply_pending_writes(settings.data_dir, library_id=library, limit=limit)
     _emit(ctx, payload, title="Local apply")
+
+
+@citations_app.command("status")
+def citations_status_command(ctx: typer.Context) -> None:
+    payload = CitationExportClient(_human_settings()).status()
+    _emit(ctx, payload, renderer=render_config_payload, title="Citations")
+
+
+@citations_app.command("showpath")
+def citations_showpath_command(ctx: typer.Context) -> None:
+    settings = _human_settings()
+    payload = {
+        "path": str(settings.resolved_citation_export_path()),
+        "format": settings.citation_export_format,
+        "enabled": bool(settings.citation_export_enabled),
+    }
+    _emit(ctx, payload, renderer=render_config_payload, title="Citations path")
+
+
+@citations_app.command("enable")
+def citations_enable_command(
+    ctx: typer.Context,
+    format: str | None = typer.Option(None, "--format", help="Citation database format."),
+    path: str | None = typer.Option(None, "--path", help="Output path for the citations database."),
+) -> None:
+    settings = _human_settings()
+    settings.citation_export_enabled = True
+    if format:
+        settings.citation_export_format = format
+    if path is not None:
+        settings.citation_export_path = path
+    save_settings(settings)
+    canonical, _, _, _, _, _ = _runtime_services(settings)
+    client = CitationExportClient(settings)
+    payload = {
+        "settings": settings.as_dict(),
+        "status": client.status(),
+        "export": client.export_from_canonical(canonical),
+    }
+    _emit(ctx, payload, renderer=render_config_payload, title="Citations")
+
+
+@citations_app.command("disable")
+def citations_disable_command(ctx: typer.Context) -> None:
+    settings = _human_settings()
+    settings.citation_export_enabled = False
+    save_settings(settings)
+    payload = {
+        "settings": settings.as_dict(),
+        "status": CitationExportClient(settings).status(),
+    }
+    _emit(ctx, payload, renderer=render_config_payload, title="Citations")
+
+
+@citations_app.command("export")
+def citations_export_command(
+    ctx: typer.Context,
+    library: str | None = typer.Option(None, "--library", help="Optional library scope."),
+    format: str | None = typer.Option(None, "--format", help="Override citation database format."),
+    path: str | None = typer.Option(None, "--path", help="Override output path."),
+) -> None:
+    settings = _human_settings()
+    canonical, _, _, _, _, _ = _runtime_services(settings)
+    payload = CitationExportClient(settings).export_from_canonical(
+        canonical,
+        library,
+        format_name=format,
+        output_path=path,
+    )
+    _emit(ctx, payload, renderer=render_config_payload, title="Citations")
 
 
 @app.command(

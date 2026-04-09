@@ -19,6 +19,9 @@ class Settings:
     canonical_db: str | None = None
     mirror_db: str | None = None
     export_dir: str | None = None
+    citation_export_enabled: bool = False
+    citation_export_format: str = "biblatex"
+    citation_export_path: str | None = None
     file_cache_dir: str | None = None
     qmd_collection: str = "zotero-headless"
     zotero_bin: str | None = None
@@ -37,6 +40,12 @@ class Settings:
     def resolved_export_dir(self) -> Path:
         return Path(self.export_dir).expanduser() if self.export_dir else self.resolved_state_dir() / "qmd-export"
 
+    def resolved_citation_export_path(self) -> Path:
+        if self.citation_export_path:
+            return Path(self.citation_export_path).expanduser()
+        suffix = ".json" if self.citation_export_format == "csl-json" else ".bib"
+        return self.resolved_state_dir() / f"citations{suffix}"
+
     def resolved_file_cache_dir(self) -> Path:
         return Path(self.file_cache_dir).expanduser() if self.file_cache_dir else self.resolved_state_dir() / "files"
 
@@ -48,6 +57,7 @@ class Settings:
     def ensure_runtime_dirs(self) -> None:
         ensure_dir(self.resolved_state_dir())
         ensure_dir(self.resolved_export_dir())
+        ensure_dir(self.resolved_citation_export_path().parent)
         ensure_dir(self.resolved_file_cache_dir())
         ensure_dir(self.resolved_canonical_db().parent)
         ensure_dir(self.resolved_mirror_db().parent)

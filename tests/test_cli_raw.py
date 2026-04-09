@@ -1,6 +1,6 @@
 import unittest
 
-from zotero_headless.cli import build_parser
+from zotero_headless.raw_cli import build_parser
 
 
 class CliRawParserTests(unittest.TestCase):
@@ -19,6 +19,22 @@ class CliRawParserTests(unittest.TestCase):
         self.assertEqual(args.raw_command, "sync")
         self.assertEqual(args.sync_command, "pull")
         self.assertEqual(args.library, "user:123")
+
+    def test_raw_citations_enable_parses_arguments(self):
+        args = build_parser().parse_args(["raw", "citations", "enable", "--format", "csl-json", "--path", "/tmp/citations.json"])
+
+        self.assertEqual(args.command, "raw")
+        self.assertEqual(args.raw_command, "citations")
+        self.assertEqual(args.citations_command, "enable")
+        self.assertEqual(args.format, "csl-json")
+        self.assertEqual(args.path, "/tmp/citations.json")
+
+    def test_raw_citations_showpath_parses_arguments(self):
+        args = build_parser().parse_args(["raw", "citations", "showpath"])
+
+        self.assertEqual(args.command, "raw")
+        self.assertEqual(args.raw_command, "citations")
+        self.assertEqual(args.citations_command, "showpath")
 
 
 if __name__ == "__main__":

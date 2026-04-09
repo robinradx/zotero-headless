@@ -20,6 +20,7 @@ from .api import serve_api
 from .adapters.local_desktop import LocalDesktopAdapter
 from .adapters.web_sync import CanonicalWebSyncAdapter
 from .capabilities import get_capabilities
+from .citations import CitationExportClient, CitationExportFormat
 from .cli_ui import (
     render_config_payload,
     render_daemon_command,
@@ -57,6 +58,17 @@ def _emit(payload, *, as_json: bool = False, renderer=None) -> None:
         print(renderer(payload))
         return
     _print(payload)
+
+
+def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None, discovered_libraries=None, selected_remote_libraries=None) -> dict[str, object]:
+    return {
+        "config": str(config_path),
+        "autodiscovered": autodiscovered or {},
+        "settings": settings.as_dict(),
+        "citation_export_path": str(settings.resolved_citation_export_path()),
+        "discovered_libraries": discovered_libraries or [],
+        "selected_remote_libraries": selected_remote_libraries or [],
+    }
 
 
 def _add_machine_commands(sub) -> None:
@@ -125,6 +137,19 @@ def _add_machine_commands(sub) -> None:
         qmd_cmd.add_argument("query")
         qmd_cmd.add_argument("--library")
         qmd_cmd.add_argument("-n", "--limit", type=int, default=10)
+
+    citations = sub.add_parser("citations")
+    citations_sub = citations.add_subparsers(dest="citations_command", required=True)
+    citations_sub.add_parser("status")
+    citations_sub.add_parser("showpath")
+    citations_enable = citations_sub.add_parser("enable")
+    citations_enable.add_argument("--format", choices=[fmt.value for fmt in CitationExportFormat], default=None)
+    citations_enable.add_argument("--path")
+    citations_sub.add_parser("disable")
+    citations_export = citations_sub.add_parser("export")
+    citations_export.add_argument("--library")
+    citations_export.add_argument("--format", choices=[fmt.value for fmt in CitationExportFormat], default=None)
+    citations_export.add_argument("--path")
 
     api = sub.add_parser("api")
     api_sub = api.add_subparsers(dest="api_command", required=True)
@@ -288,6 +313,9 @@ def main(argv: list[str] | None = None) -> int:
                 canonical_db=str(settings.resolved_canonical_db()),
                 mirror_db=str(settings.resolved_mirror_db()),
                 export_dir=str(settings.resolved_export_dir()),
+                citation_export_enabled=settings.citation_export_enabled,
+                citation_export_format=settings.citation_export_format,
+                citation_export_path=settings.citation_export_path,
                 file_cache_dir=str(settings.resolved_file_cache_dir()),
                 qmd_collection=settings.qmd_collection,
                 zotero_bin=args.zotero_bin or settings.zotero_bin,
@@ -296,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             path = save_settings(updated)
             _emit(
-                {"config": str(path), "settings": updated.as_dict()},
+                _setup_payload(path, updated),
                 as_json=args.json,
                 renderer=render_setup_result,
             )
@@ -305,12 +333,12 @@ def main(argv: list[str] | None = None) -> int:
             result = run_setup_wizard(settings)
             path = save_settings(result.settings)
             _emit(
-                {
-                    "config": str(path),
-                    "settings": result.settings.as_dict(),
-                    "discovered_libraries": result.discovered_libraries,
-                    "selected_remote_libraries": result.selected_library_ids,
-                },
+                _setup_payload(
+                    path,
+                    result.settings,
+                    discovered_libraries=result.discovered_libraries,
+                    selected_remote_libraries=result.selected_library_ids,
+                ),
                 as_json=args.json,
                 renderer=render_setup_result,
             )
@@ -350,13 +378,13 @@ def main(argv: list[str] | None = None) -> int:
             result = run_setup_wizard(settings, mode=mode)
             path = save_settings(result.settings)
             _emit(
-                {
-                    "config": str(path),
-                    "autodiscovered": result.autodiscovered,
-                    "settings": result.settings.as_dict(),
-                    "discovered_libraries": result.discovered_libraries,
-                    "selected_remote_libraries": result.selected_library_ids,
-                },
+                _setup_payload(
+                    path,
+                    result.settings,
+                    autodiscovered=result.autodiscovered,
+                    discovered_libraries=result.discovered_libraries,
+                    selected_remote_libraries=result.selected_library_ids,
+                ),
                 as_json=args.json,
                 renderer=render_setup_result,
             )
@@ -624,6 +652,45 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.qmd_command in {"query", "search", "vsearch"}:
             _print(client.search(args.qmd_command, args.query, limit=args.limit, library_id=args.library))
+            return 0
+
+    if command == "citations":
+        if args.citations_command == "status":
+            _print(CitationExportClient(settings).status())
+            return 0
+        if args.citations_command == "showpath":
+            _print(
+                {
+                    "path": str(settings.resolved_citation_export_path()),
+                    "format": settings.citation_export_format,
+                    "enabled": bool(settings.citation_export_enabled),
+                }
+            )
+            return 0
+        if args.citations_command == "enable":
+            settings.citation_export_enabled = True
+            if args.format:
+                settings.citation_export_format = args.format
+            if args.path is not None:
+                settings.citation_export_path = args.path
+            save_settings(settings)
+            client = CitationExportClient(settings)
+            _print(
+                {
+                    "settings": settings.as_dict(),
+                    "status": client.status(),
+                    "export": client.export_from_canonical(canonical),
+                }
+            )
+            return 0
+        if args.citations_command == "disable":
+            settings.citation_export_enabled = False
+            save_settings(settings)
+            _print({"settings": settings.as_dict(), "status": CitationExportClient(settings).status()})
+            return 0
+        if args.citations_command == "export":
+            client = CitationExportClient(settings)
+            _print(client.export_from_canonical(canonical, args.library, format_name=args.format, output_path=args.path))
             return 0
 
     if command == "mirror":

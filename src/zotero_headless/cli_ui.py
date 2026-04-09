@@ -245,6 +245,7 @@ def render_setup_result(payload: dict[str, Any]) -> str:
     settings = payload.get("settings") or {}
     autodiscovered = payload.get("autodiscovered") or {}
     selected = payload.get("selected_remote_libraries") or []
+    citation_export_path = payload.get("citation_export_path") or settings.get("citation_export_path") or "not configured"
     lines = [
         "Setup complete",
         f"Config saved to: {payload.get('config')}",
@@ -253,6 +254,8 @@ def render_setup_result(payload: dict[str, Any]) -> str:
         f"Default remote library: {settings.get('default_library_id') or 'none'}",
         f"Daemon address: {settings.get('daemon_host')}:{settings.get('daemon_port')}",
         f"qmd collection: {settings.get('qmd_collection')}",
+        f"Citations export: {_bool_text(bool(settings.get('citation_export_enabled')))} ({settings.get('citation_export_format')})",
+        f"Citations path: {citation_export_path}",
     ]
     if autodiscovered:
         lines.append("Autodiscovered:")

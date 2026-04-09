@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from .citations import CitationExportClient
 from .config import Settings
 from .core import CanonicalStore, EntityType
 from .store import MirrorStore
@@ -290,21 +291,47 @@ class QmdClient:
 
 class QmdAutoIndexer:
     def __init__(self, settings: Settings):
+        self.settings = settings
         self.client = QmdClient(settings)
+        self.citation_client = CitationExportClient(settings)
+
+    def qmd_enabled(self) -> bool:
+        return shutil.which("qmd") is not None
+
+    def citations_enabled(self) -> bool:
+        return self.citation_client.enabled()
 
     def enabled(self) -> bool:
-        return shutil.which("qmd") is not None
+        return self.qmd_enabled() or self.citations_enabled()
 
     def refresh_canonical_library(self, canonical: CanonicalStore, library_id: str) -> dict[str, Any]:
         if not self.enabled():
-            return {"enabled": False, "reason": "qmd_missing", "library_id": library_id}
-        result = self.client.export_from_canonical(canonical, library_id)
-        self.client.embed(force=True)
-        return {"enabled": True, "library_id": library_id, **result}
+            return {"enabled": False, "reason": "no_auto_exports_enabled", "library_id": library_id}
+        payload: dict[str, Any] = {"enabled": True, "library_id": library_id}
+        if self.qmd_enabled():
+            result = self.client.export_from_canonical(canonical, library_id)
+            self.client.embed(force=True)
+            payload.update(result)
+        else:
+            payload["qmd"] = {"enabled": False, "reason": "qmd_missing"}
+        if self.citations_enabled():
+            payload["citations"] = self.citation_client.export_from_canonical(canonical)
+        else:
+            payload["citations"] = {"enabled": False, "reason": "citations_export_disabled"}
+        return payload
 
     def refresh_mirror_library(self, store: MirrorStore, library_id: str) -> dict[str, Any]:
         if not self.enabled():
-            return {"enabled": False, "reason": "qmd_missing", "library_id": library_id}
-        result = self.client.export_from_store(store, library_id)
-        self.client.embed(force=True)
-        return {"enabled": True, "library_id": library_id, **result}
+            return {"enabled": False, "reason": "no_auto_exports_enabled", "library_id": library_id}
+        payload: dict[str, Any] = {"enabled": True, "library_id": library_id}
+        if self.qmd_enabled():
+            result = self.client.export_from_store(store, library_id)
+            self.client.embed(force=True)
+            payload.update(result)
+        else:
+            payload["qmd"] = {"enabled": False, "reason": "qmd_missing"}
+        if self.citations_enabled():
+            payload["citations"] = {"enabled": False, "reason": "canonical_only"}
+        else:
+            payload["citations"] = {"enabled": False, "reason": "citations_export_disabled"}
+        return payload

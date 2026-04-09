@@ -2,6 +2,7 @@ import io
 import json
 import unittest
 from contextlib import redirect_stdout
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from zotero_headless.cli import main
@@ -50,6 +51,52 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("MCP client setup targets", output)
         self.assertIn("codex", output)
         self.assertIn("/tmp/codex-config.toml", output)
+
+    def test_citations_status_can_emit_json(self):
+        buffer = io.StringIO()
+        with patch(
+            "zotero_headless.cli.load_settings",
+            return_value=Settings(state_dir="/tmp/zhl-state", citation_export_enabled=True, citation_export_format="csl-json"),
+        ), redirect_stdout(buffer):
+            exit_code = main(["--json", "citations", "status"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(buffer.getvalue())
+        self.assertTrue(payload["enabled"])
+        self.assertEqual(payload["format"], "csl-json")
+        self.assertTrue(payload["path"].endswith("citations.json"))
+
+    def test_citations_showpath_can_emit_json(self):
+        buffer = io.StringIO()
+        with patch(
+            "zotero_headless.cli.load_settings",
+            return_value=Settings(state_dir="/tmp/zhl-state", citation_export_enabled=True, citation_export_format="csl-json"),
+        ), redirect_stdout(buffer):
+            exit_code = main(["--json", "citations", "showpath"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(buffer.getvalue())
+        self.assertTrue(payload["enabled"])
+        self.assertEqual(payload["format"], "csl-json")
+        self.assertEqual(payload["path"], "/tmp/zhl-state/citations.json")
+
+    def test_setup_start_prints_citation_export_path(self):
+        buffer = io.StringIO()
+        result = SimpleNamespace(
+            settings=Settings(state_dir="/tmp/zhl-state", citation_export_enabled=True, citation_export_format="csl-json"),
+            autodiscovered={},
+            discovered_libraries=[],
+            selected_library_ids=[],
+        )
+        with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
+            "zotero_headless.cli.run_setup_wizard",
+            return_value=result,
+        ), patch("zotero_headless.cli.save_settings", return_value="/tmp/zhl-state/config.json"), redirect_stdout(buffer):
+            exit_code = main(["setup", "start"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Citations path: /tmp/zhl-state/citations.json", output)
 
 
 if __name__ == "__main__":

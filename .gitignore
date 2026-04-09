@@ -6,6 +6,7 @@ __pycache__/
 .python-version
 .venv/
 .venv-build/
+.venv-test/
 venv/
 env/
 ENV/

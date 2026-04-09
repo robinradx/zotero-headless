@@ -434,12 +434,6 @@ Implemented:
 - remote attachment handling for the currently supported stored-file and snapshot-style paths
 - Better BibTeX-oriented citekey handling
 
-Still intentionally narrow:
-
-- some local desktop writeback edge cases
-- full Zotero file-sync parity across every attachment mode and conflict case
-- broader packaging/release polish
-
 ## Documentation
 
 - [ARCHITECTURE.md](./docs/ARCHITECTURE.md)

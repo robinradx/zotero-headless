@@ -507,9 +507,15 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         source_path = payload.get("sourcePath")
         if not isinstance(source_path, str) or not source_path:
             return None
+        source = Path(source_path)
+        requested_filename = payload.get("filename")
+        filename = str(requested_filename) if isinstance(requested_filename, str) and requested_filename else None
+        if payload.get("linkMode") == "imported_url" and self._should_zip_snapshot_transport(source, payload):
+            lead_file = self._resolve_snapshot_lead_file(source, filename)
+            filename = lead_file.name
         request: dict[str, object] = {
             "sourcePath": source_path,
-            "filename": str(payload.get("filename") or Path(source_path).name),
+            "filename": filename or source.name,
         }
         content_type = payload.get("contentType")
         if isinstance(content_type, str) and content_type:
@@ -517,8 +523,8 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         previous_md5 = payload.get("md5")
         if isinstance(previous_md5, str) and previous_md5:
             request["previousMd5"] = previous_md5
-        if payload.get("linkMode") == "imported_url" and self._should_zip_snapshot_transport(Path(source_path), payload):
-            request.update(self._build_snapshot_upload_transport(str(entity["entity_key"]), Path(source_path), request))
+        if payload.get("linkMode") == "imported_url" and self._should_zip_snapshot_transport(source, payload):
+            request.update(self._build_snapshot_upload_transport(str(entity["entity_key"]), source, request))
         return request
 
     def _should_zip_snapshot_transport(self, source_path: Path, payload: dict[str, object]) -> bool:
@@ -530,6 +536,25 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         filename = str(payload.get("filename") or source_path.name).lower()
         return filename.endswith(".html") or filename.endswith(".htm")
 
+    def _resolve_snapshot_lead_file(self, source_path: Path, filename: str | None) -> Path:
+        if source_path.is_file():
+            return source_path
+        if filename:
+            candidate = source_path / filename
+            if candidate.exists() and candidate.is_file():
+                return candidate
+        html_candidates = sorted(
+            child for child in source_path.rglob("*") if child.is_file() and child.suffix.lower() in {".html", ".htm"}
+        )
+        if html_candidates:
+            return html_candidates[0]
+        file_candidates = sorted(child for child in source_path.rglob("*") if child.is_file())
+        if file_candidates:
+            return file_candidates[0]
+        if filename:
+            raise FileNotFoundError(f"Snapshot directory does not contain lead file {filename!r}: {source_path}")
+        raise FileNotFoundError(f"Snapshot directory contains no files: {source_path}")
+
     def _build_snapshot_upload_transport(
         self,
         item_key: str,
@@ -537,16 +562,10 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         request: dict[str, object],
     ) -> dict[str, object]:
         filename = str(request["filename"])
+        lead_file = self._resolve_snapshot_lead_file(source_path, filename if source_path.is_dir() else None)
         if source_path.is_dir():
-            lead_file = source_path / filename
-            if not lead_file.exists():
-                candidates = sorted(source_path.glob("*.html")) + sorted(source_path.glob("*.htm"))
-                if candidates:
-                    lead_file = candidates[0]
-                    request["filename"] = lead_file.name
-                    filename = lead_file.name
-                else:
-                    raise FileNotFoundError(f"Snapshot directory does not contain lead file {filename!r}: {source_path}")
+            request["filename"] = lead_file.name
+            filename = lead_file.name
             zip_bytes = self._zip_directory(source_path)
         else:
             lead_file = source_path

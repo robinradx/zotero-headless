@@ -1044,6 +1044,49 @@ class LocalDesktopAdapterTests(unittest.TestCase):
             self.assertEqual(created["attachments"][0]["path"], "storage:index.html")
             self.assertEqual(created["attachments"][0]["linkMode"], 1)
 
+    def test_apply_pending_writes_copies_nested_snapshot_directory_without_explicit_filename(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "Zotero"
+            sqlite_path = create_local_zotero_fixture(data_dir)
+            snapshot_dir = Path(tmp) / "snapshot"
+            nested_dir = snapshot_dir / "nested"
+            nested_dir.mkdir(parents=True)
+            (nested_dir / "index.html").write_text("<html><img src='../image.png'></html>", encoding="utf-8")
+            (snapshot_dir / "image.png").write_bytes(b"png")
+            with closing(sqlite3.connect(sqlite_path)) as conn:
+                conn.execute("INSERT INTO fieldsCombined (fieldID, fieldName) VALUES (9, 'url')")
+                conn.commit()
+            canonical = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            adapter = LocalDesktopAdapter(canonical)
+            adapter.import_snapshot(str(data_dir))
+
+            canonical.save_entity(
+                "local:1",
+                EntityType.ITEM,
+                {
+                    "itemType": "attachment",
+                    "title": "Nested Snapshot Bundle",
+                    "sourcePath": str(snapshot_dir),
+                    "contentType": "text/html",
+                    "linkMode": "imported_url",
+                    "parentItemKey": "ITEM1234",
+                    "url": "https://example.com/nested-bundle",
+                },
+                entity_key="ATTNEST1",
+                synced=False,
+                change_type=ChangeType.CREATE,
+            )
+
+            result = adapter.apply_pending_writes(str(data_dir), library_id="local:1")
+
+            self.assertEqual(result["applied"], 1)
+            self.assertTrue((data_dir / "storage" / "ATTNEST1" / "nested" / "index.html").exists())
+            self.assertTrue((data_dir / "storage" / "ATTNEST1" / "image.png").exists())
+            db = LocalZoteroDB(sqlite_path)
+            created = db.get_item_detail("ATTNEST1")
+            self.assertEqual(created["attachments"][0]["path"], "storage:nested/index.html")
+            self.assertEqual(created["attachments"][0]["linkMode"], 1)
+
     def test_apply_pending_writes_creates_linked_url_attachment_without_copying_into_storage(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp) / "Zotero"

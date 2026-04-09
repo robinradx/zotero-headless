@@ -1037,6 +1037,126 @@ class CanonicalWebSyncAdapterTests(unittest.TestCase):
             with zipfile.ZipFile(io.BytesIO(upload["upload_bytes"])) as zf:
                 self.assertEqual(sorted(zf.namelist()), ["image.png", "index.html"])
 
+    def test_push_changes_uploads_nested_snapshot_directory_without_explicit_filename(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot_dir = Path(tmp) / "snapshot"
+            nested_dir = snapshot_dir / "nested"
+            nested_dir.mkdir(parents=True)
+            (nested_dir / "index.html").write_text("<html><img src='../image.png'></html>", encoding="utf-8")
+            (snapshot_dir / "image.png").write_bytes(b"png-bytes")
+            store = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            store.upsert_library(
+                "user:123",
+                name="demo-user",
+                source="remote-sync",
+                metadata={"library_version": 77},
+            )
+            store.save_entity(
+                "user:123",
+                EntityType.ITEM,
+                {
+                    "itemType": "attachment",
+                    "linkMode": "imported_url",
+                    "sourcePath": str(snapshot_dir),
+                    "url": "https://example.com/nested-snapshot",
+                    "title": "Nested Snapshot",
+                    "contentType": "text/html",
+                },
+                entity_key="SNAPZIP2",
+                change_type=ChangeType.CREATE,
+                synced=False,
+            )
+            client = FakeWebClient()
+            adapter = CanonicalWebSyncAdapter(store, client)
+
+            result = adapter.push_changes("user:123")
+
+            self.assertEqual(result["pushed"], 1)
+            upload = client.uploads[0]
+            self.assertEqual(upload["filename"], "index.html")
+            self.assertEqual(upload["upload_filename"], "SNAPZIP2.zip")
+            with zipfile.ZipFile(io.BytesIO(upload["upload_bytes"])) as zf:
+                self.assertEqual(sorted(zf.namelist()), ["image.png", "nested/index.html"])
+
+    def test_push_changes_records_attachment_upload_conflict_and_preserves_unsynced_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_file = Path(tmp) / "paper-v2.pdf"
+            source_file.write_bytes(b"%PDF-1.4 updated")
+            store = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            store.upsert_library(
+                "user:123",
+                name="demo-user",
+                source="remote-sync",
+                metadata={"library_version": 77},
+            )
+            store.save_entity(
+                "user:123",
+                EntityType.ITEM,
+                {
+                    "key": "ATTACH01",
+                    "itemType": "attachment",
+                    "linkMode": "imported_file",
+                    "filename": "paper-v1.pdf",
+                    "contentType": "application/pdf",
+                    "md5": "old-md5",
+                },
+                entity_key="ATTACH01",
+                version=4,
+                remote_version=4,
+                synced=True,
+            )
+            store.save_entity(
+                "user:123",
+                EntityType.ITEM,
+                {
+                    "key": "ATTACH01",
+                    "itemType": "attachment",
+                    "linkMode": "imported_file",
+                    "filename": "paper-v2.pdf",
+                    "contentType": "application/pdf",
+                    "sourcePath": str(source_file),
+                    "md5": "old-md5",
+                },
+                entity_key="ATTACH01",
+                change_type=ChangeType.UPDATE,
+                base_version=4,
+                synced=False,
+            )
+            client = FakeWebClient()
+            client.remote_items["ATTACH01"] = {
+                "key": "ATTACH01",
+                "version": 4,
+                "data": {
+                    "key": "ATTACH01",
+                    "version": 4,
+                    "itemType": "attachment",
+                    "linkMode": "imported_file",
+                    "filename": "paper-v1.pdf",
+                    "contentType": "application/pdf",
+                    "md5": "old-md5",
+                },
+            }
+
+            def conflict_upload(*args, **kwargs):
+                raise ZoteroApiError(412, "Precondition Failed", "attachment conflict")
+
+            client.upload_attachment_file = conflict_upload
+            adapter = CanonicalWebSyncAdapter(store, client)
+
+            result = adapter.push_changes("user:123")
+
+            self.assertEqual(result["pushed"], 0)
+            self.assertEqual(len(result["conflicts"]), 1)
+            self.assertTrue(result["pull_result"]["skipped"])
+            conflict = result["conflicts"][0]
+            self.assertEqual(conflict["entity_key"], "ATTACH01")
+            self.assertEqual(conflict["remote"]["version"], 5)
+            entity = store.get_entity("user:123", EntityType.ITEM, "ATTACH01")
+            self.assertFalse(entity["synced"])
+            self.assertEqual(entity["remote_version"], 5)
+            self.assertEqual(entity["payload"]["sourcePath"], str(source_file))
+            self.assertEqual(entity["conflict"]["remote"]["version"], 5)
+
     def test_push_changes_does_not_upload_linked_url_attachments(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = CanonicalStore(Path(tmp) / "canonical.sqlite")

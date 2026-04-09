@@ -87,7 +87,10 @@ def _state(ctx: typer.Context) -> CliState:
 
 def _emit(ctx: typer.Context, payload, *, renderer=None, title: str | None = None) -> None:
     if _state(ctx).json_output:
-        console.print(json.dumps(payload, indent=2, sort_keys=True))
+        # Bypass Rich for JSON output so consumers get clean, parseable output
+        # regardless of terminal width, styling, or redirected stdout.
+        sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        sys.stdout.flush()
         return
     if renderer is None:
         console.print(Pretty(payload))

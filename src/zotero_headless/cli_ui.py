@@ -2,8 +2,17 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable
 
+try:
+    import questionary
+except ImportError:  # pragma: no cover - optional at import time for test environments
+    questionary = None
+
 
 PromptFn = Callable[[str], str]
+SecretPromptFn = Callable[[str], str]
+ConfirmFn = Callable[[str, bool | None], bool]
+SelectOneFn = Callable[[str, list[tuple[str, str]], str | None], str]
+SelectManyFn = Callable[[str, list[tuple[str, str]], list[str]], list[str]]
 
 
 def prompt_yes_no(
@@ -28,6 +37,78 @@ def prompt_yes_no(
             return True
         elif raw in {"n", "no"}:
             return False
+
+
+def questionary_text(label: str, *, default: str | None = None) -> str:
+    if questionary is None:
+        suffix = f" [{default}]" if default else ""
+        raw = input(f"{label}{suffix}: ").strip()
+        return raw or (default or "")
+    result = questionary.text(label, default=default or "").ask()
+    return (result or default or "").strip()
+
+
+def questionary_password(label: str, *, default: str | None = None) -> str:
+    if questionary is None:
+        suffix = " [saved]" if default else ""
+        raw = input(f"{label}{suffix}: ").strip()
+        return raw or (default or "")
+    result = questionary.password(label).ask()
+    return (result or default or "").strip()
+
+
+def questionary_confirm(label: str, default: bool | None = None) -> bool:
+    if questionary is None:
+        return prompt_yes_no(label, default=default)
+    return bool(questionary.confirm(label, default=default if default is not None else True).ask())
+
+
+def questionary_select_one(label: str, choices: list[tuple[str, str]], default: str | None = None) -> str:
+    if questionary is None:
+        for index, (value, title) in enumerate(choices, start=1):
+            marker = " (default)" if value == default else ""
+            print(f"  {index}. {title}{marker}")
+        while True:
+            raw = input(f"{label}: ").strip()
+            if not raw and default is not None:
+                return default
+            try:
+                selected = int(raw)
+            except ValueError:
+                continue
+            if 1 <= selected <= len(choices):
+                return choices[selected - 1][0]
+    q_choices = [questionary.Choice(title=title, value=value) for value, title in choices]
+    return questionary.select(label, choices=q_choices, default=default).ask()
+
+
+def questionary_select_many(label: str, choices: list[tuple[str, str]], defaults: list[str] | None = None) -> list[str]:
+    defaults = defaults or []
+    if questionary is None:
+        print(label)
+        for index, (_, title) in enumerate(choices, start=1):
+            marker = " [selected]" if choices[index - 1][0] in defaults else ""
+            print(f"  {index}. {title}{marker}")
+        raw = input("Selection (all, none, or comma-separated numbers): ").strip().lower()
+        if not raw:
+            return defaults
+        if raw in {"all", "*"}:
+            return [value for value, _ in choices]
+        if raw in {"none", "0"}:
+            return []
+        selected: list[str] = []
+        for part in raw.split(","):
+            index = int(part.strip())
+            if 1 <= index <= len(choices):
+                selected.append(choices[index - 1][0])
+        return selected
+
+    q_choices = [
+        questionary.Choice(title=title, value=value, checked=value in defaults)
+        for value, title in choices
+    ]
+    result = questionary.checkbox(label, choices=q_choices).ask()
+    return list(result or [])
 
 
 def _label(text: str) -> str:

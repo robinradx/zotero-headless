@@ -48,7 +48,8 @@ class CliOutputTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         output = buffer.getvalue()
         self.assertIn("MCP client setup targets", output)
-        self.assertIn("codex [user]: installed", output)
+        self.assertIn("codex", output)
+        self.assertIn("/tmp/codex-config.toml", output)
 
 
 if __name__ == "__main__":

@@ -144,6 +144,13 @@ zhl setup start
 
 Interactive commands now default to human-readable output. If you want script-friendly payloads for setup, version, update, doctor, or daemon status commands, add `--json`.
 
+The CLI is now split by audience:
+
+- human/operator flows live on the main top-level commands like `setup`, `doctor`, `version`, and `daemon`
+- strict programmatic CLI usage lives under `zhl raw ...`
+
+Use `zhl raw ...` when you want non-interactive, automation-friendly command paths that mirror the underlying data operations closely.
+
 Autodiscovery looks for:
 
 - standard Zotero data directories such as `~/Zotero`
@@ -318,6 +325,15 @@ API exposure works in two modes:
   - standalone HTTP API process
 - `zotero-headless-daemon serve`
   - daemon runtime that hosts the same HTTP API plus runtime state and background sync
+
+Strict machine-oriented CLI examples:
+
+```text
+zhl raw sync discover
+zhl raw sync pull --library user:123456
+zhl raw item create user:123456 '{"itemType":"note","note":"Hello"}'
+zhl raw local import
+```
 
 So no, the API is not only exposed on `zotero-headless-daemon`.
 

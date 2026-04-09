@@ -397,6 +397,7 @@ Routing policy:
   - sync discover, pull, push
   - conflict resolution
   - local desktop import, plan-apply, and apply
+- If you must use the CLI from an agent or script, prefer the strict `zhl raw ...` namespace over the human-oriented top-level commands.
 - Prefer the HTTP API over MCP when the agent can call HTTP directly and wants stable structured integration.
 - Prefer MCP when the client is already MCP-native and tool-use ergonomics are better there.
 - Do not use qmd semantic search when the task already names exact objects or requires authoritative current metadata.
@@ -404,12 +405,12 @@ Routing policy:
 {target_notes}
 Recommended workflow:
 1. Start with `zhl capabilities` or `zhl daemon status` when runtime shape is unclear.
-2. If remote libraries are involved, run `zhl sync discover` and `zhl sync pull --library <library_id>` before deeper work.
+2. If remote libraries are involved, run `zhl raw sync discover` and `zhl raw sync pull --library <library_id>` before deeper work when you are driving the CLI programmatically.
 3. Choose retrieval mode:
    - qmd for exploratory retrieval
    - API/MCP/CLI for exact reads
-4. For writes, use direct mutation commands and then `zhl sync push --library <library_id>` when remote sync is required.
-5. If a write fails, inspect `zhl sync conflicts --library <library_id>` before retrying.
+4. For writes, use direct mutation commands and then `zhl raw sync push --library <library_id>` when remote sync is required.
+5. If a write fails, inspect `zhl raw sync conflicts --library <library_id>` before retrying.
 
 Common recipes:
 - Find papers about a topic:
@@ -417,14 +418,14 @@ Common recipes:
 - Fetch an exact item:
   - use API or MCP item-get tools with the known `library_id` and `item_key`
 - Sync a remote library before exact reads:
-  - `zhl sync discover`
-  - `zhl sync pull --library user:123456`
+  - `zhl raw sync discover`
+  - `zhl raw sync pull --library user:123456`
 - Resolve remote write issues:
-  - `zhl sync conflicts --library user:123456`
+  - `zhl raw sync conflicts --library user:123456`
 - Desktop Zotero interoperability:
-  - `zhl local import`
-  - `zhl local plan-apply --library local:1`
-  - `zhl local apply --library local:1`
+  - `zhl raw local import`
+  - `zhl raw local plan-apply --library local:1`
+  - `zhl raw local apply --library local:1`
 - Headless daemon workflow:
   - `zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300`
 - Daemon observability:
@@ -442,10 +443,10 @@ Anti-patterns:
 High-value commands:
 - `zhl capabilities`
 - `zhl daemon status`
-- `zhl sync discover`
-- `zhl sync pull --library <library_id>`
-- `zhl sync push --library <library_id>`
-- `zhl sync conflicts --library <library_id>`
+- `zhl raw sync discover`
+- `zhl raw sync pull --library <library_id>`
+- `zhl raw sync push --library <library_id>`
+- `zhl raw sync conflicts --library <library_id>`
 - `zhl qmd query "<topic>"`
 
 Useful daemon endpoints:

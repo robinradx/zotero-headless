@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 
 from .agent_setup import (
@@ -61,6 +62,9 @@ def _emit(payload, *, as_json: bool = False, renderer=None) -> None:
 
 
 def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None, discovered_libraries=None, selected_remote_libraries=None) -> dict[str, object]:
+    warnings: list[str] = []
+    if shutil.which("qmd") is None:
+        warnings.append("qmd is not installed. qmd-backed search and indexing stay unavailable until you install `qmd`.")
     return {
         "config": str(config_path),
         "autodiscovered": autodiscovered or {},
@@ -68,6 +72,7 @@ def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None
         "citation_export_path": str(settings.resolved_citation_export_path()),
         "discovered_libraries": discovered_libraries or [],
         "selected_remote_libraries": selected_remote_libraries or [],
+        "warnings": warnings,
     }
 
 

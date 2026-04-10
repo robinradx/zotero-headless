@@ -422,7 +422,7 @@ zotero-headless skill install opencode
 
 `zotero-headless skill add claude-desktop` generates a Claude skill archive on your Desktop. Upload that archive in the Skills section of Claude Desktop or on claude.ai.
 
-## What Is Implemented vs. What Is Still Narrow
+## Roadmap
 
 Implemented:
 

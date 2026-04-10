@@ -91,12 +91,17 @@ class CliOutputTests(unittest.TestCase):
         with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
             "zotero_headless.cli.run_setup_wizard",
             return_value=result,
-        ), patch("zotero_headless.cli.save_settings", return_value="/tmp/zhl-state/config.json"), redirect_stdout(buffer):
+        ), patch("zotero_headless.cli.save_settings", return_value="/tmp/zhl-state/config.json"), patch(
+            "zotero_headless.cli.shutil.which",
+            return_value=None,
+        ), redirect_stdout(buffer):
             exit_code = main(["setup", "start"])
 
         self.assertEqual(exit_code, 0)
         output = buffer.getvalue()
         self.assertIn("Citations path: /tmp/zhl-state/citations.json", output)
+        self.assertIn("Warnings:", output)
+        self.assertIn("qmd is not installed.", output)
 
 
 if __name__ == "__main__":

@@ -245,6 +245,7 @@ def render_setup_result(payload: dict[str, Any]) -> str:
     settings = payload.get("settings") or {}
     autodiscovered = payload.get("autodiscovered") or {}
     selected = payload.get("selected_remote_libraries") or []
+    warnings = payload.get("warnings") or []
     citation_export_path = payload.get("citation_export_path") or settings.get("citation_export_path") or "not configured"
     lines = [
         "Setup complete",
@@ -266,6 +267,9 @@ def render_setup_result(payload: dict[str, Any]) -> str:
     if selected:
         lines.append("Configured remote libraries:")
         lines.extend(f"- {library_id}" for library_id in selected)
+    if warnings:
+        lines.append("Warnings:")
+        lines.extend(f"- {warning}" for warning in warnings)
     return "\n".join(lines)
 
 

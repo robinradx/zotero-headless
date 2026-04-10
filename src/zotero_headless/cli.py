@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -110,6 +111,9 @@ def _human_settings(*, ensure_dirs: bool = True) -> Settings:
 
 
 def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None, discovered_libraries=None, selected_remote_libraries=None) -> dict[str, object]:
+    warnings: list[str] = []
+    if shutil.which("qmd") is None:
+        warnings.append("qmd is not installed. qmd-backed search and indexing stay unavailable until you install `qmd`.")
     return {
         "config": str(config_path),
         "autodiscovered": autodiscovered or {},
@@ -117,6 +121,7 @@ def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None
         "citation_export_path": str(settings.resolved_citation_export_path()),
         "discovered_libraries": discovered_libraries or [],
         "selected_remote_libraries": selected_remote_libraries or [],
+        "warnings": warnings,
     }
 
 

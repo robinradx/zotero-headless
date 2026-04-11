@@ -35,7 +35,7 @@ The project is built for two use cases:
 
 ## Status
 
-This is still pre-release, but it is no longer just a sketch. The codebase already includes:
+This project is still early-stage. The codebase already includes:
 
 - headless SQLite store plus change log
 - `zotero-headless` CLI

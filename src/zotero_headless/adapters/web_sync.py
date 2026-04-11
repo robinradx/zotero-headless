@@ -114,7 +114,7 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
             )
         return discovered
 
-    def pull_library(self, library_id: str, cursor: WebLibraryCursor | None = None) -> dict[str, object]:
+    def pull_library(self, library_id: str, cursor: WebLibraryCursor | None = None, *, record_recovery_snapshot: bool = True) -> dict[str, object]:
         library = self.store.get_library(library_id)
         if not library:
             raise ValueError(f"Unknown canonical library: {library_id}")

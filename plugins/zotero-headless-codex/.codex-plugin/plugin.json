@@ -1,0 +1,43 @@
+{
+  "name": "zotero-headless-codex",
+  "version": "0.9.0",
+  "description": "Codex plugin for zotero-headless with MCP access, focused Zotero skills, and research/sync agents.",
+  "author": {
+    "name": "Robin Rademacher",
+    "url": "https://github.com/robinradx"
+  },
+  "homepage": "https://github.com/robinradx/zotero-headless",
+  "repository": "https://github.com/robinradx/zotero-headless",
+  "license": "MIT",
+  "keywords": [
+    "zotero",
+    "research",
+    "mcp",
+    "codex",
+    "citations",
+    "reference-management"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks.json",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Zotero Headless",
+    "shortDescription": "Search, sync, and manage Zotero libraries from Codex.",
+    "longDescription": "Adds the zotero-headless MCP server, a focused Zotero skill pack, Codex-side research and sync agents, and startup health checks so Codex can work effectively across local and remote Zotero libraries.",
+    "developerName": "Robin Rademacher",
+    "category": "Research",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write",
+      "MCP"
+    ],
+    "websiteURL": "https://github.com/robinradx/zotero-headless",
+    "brandColor": "#2563EB",
+    "defaultPrompt": [
+      "Find related papers on a topic in my Zotero libraries.",
+      "Fetch one exact Zotero item and summarize it.",
+      "Inspect sync conflicts before pushing remote changes."
+    ]
+  }
+}

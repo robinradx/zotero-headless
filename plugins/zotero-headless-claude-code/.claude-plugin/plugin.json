@@ -1,0 +1,11 @@
+{
+  "name": "zotero-headless",
+  "version": "0.9.0",
+  "description": "Integrate zotero-headless into Claude Code — search, sync, and manage Zotero libraries via MCP, CLI, and HTTP API",
+  "author": {
+    "name": "Robin Rademacher"
+  },
+  "repository": "https://github.com/robinradx/zotero-headless",
+  "license": "MIT",
+  "keywords": ["zotero", "research", "citations", "academic", "reference-management"]
+}

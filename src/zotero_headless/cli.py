@@ -13,11 +13,13 @@ from rich.pretty import Pretty
 from rich.table import Table
 
 from .agent_setup import (
+    SUPPORTED_PLUGIN_TARGETS,
     SUPPORTED_SETUP_TARGETS,
     SUPPORTED_SKILL_TARGETS,
     SUPPORTED_SKILL_VARIANTS,
     doctor_report,
     export_skill,
+    install_plugin,
     inspect_setup_target,
     install_mcp_setup,
     install_skill,
@@ -65,6 +67,7 @@ app = typer.Typer(
 )
 setup_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Interactive setup and MCP client installation.")
 skill_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Install or export agent skills.")
+plugin_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Install local plugin bundles.")
 daemon_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Inspect or run the daemon runtime.")
 sync_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Human-friendly remote sync commands.")
 local_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Human-friendly local desktop interoperability commands.")
@@ -72,6 +75,7 @@ citations_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help=
 recovery_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Snapshot, verify, restore, and replicate full headless recovery state.")
 app.add_typer(setup_app, name="setup")
 app.add_typer(skill_app, name="skill")
+app.add_typer(plugin_app, name="plugin")
 app.add_typer(daemon_app, name="daemon")
 app.add_typer(sync_app, name="sync")
 app.add_typer(local_app, name="local")
@@ -323,7 +327,7 @@ def setup_add_command(
     scope: str = typer.Option("project", "--scope", help="Setup scope."),
 ) -> None:
     payload = install_mcp_setup(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd(), scope=scope)
-    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="MCP setup written"), title="Setup")
+    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="Setup applied"), title="Setup")
 
 
 @setup_app.command("remove")
@@ -333,7 +337,7 @@ def setup_remove_command(
     scope: str = typer.Option("project", "--scope", help="Setup scope."),
 ) -> None:
     payload = remove_mcp_setup(tool, cwd=Path.cwd(), scope=scope)
-    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="MCP setup removed"), title="Setup")
+    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="Setup removed"), title="Setup")
 
 
 @skill_app.command("install")
@@ -356,6 +360,17 @@ def skill_export_command(
 ) -> None:
     payload = export_skill(tool, variant=variant)
     _emit(ctx, payload, title="Skill export")
+
+
+@plugin_app.command("install")
+def plugin_install_command(
+    ctx: typer.Context,
+    tool: str = typer.Argument(..., help="Plugin target client."),
+) -> None:
+    if tool not in SUPPORTED_PLUGIN_TARGETS:
+        raise typer.BadParameter(f"Unsupported plugin target: {tool}")
+    payload = install_plugin(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd())
+    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="Plugin installed"), title="Plugin")
 
 
 @daemon_app.command("status")

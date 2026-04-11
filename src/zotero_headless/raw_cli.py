@@ -6,11 +6,13 @@ import shutil
 from pathlib import Path
 
 from .agent_setup import (
+    SUPPORTED_PLUGIN_TARGETS,
     SUPPORTED_SETUP_TARGETS,
     SUPPORTED_SKILL_TARGETS,
     SUPPORTED_SKILL_VARIANTS,
     export_skill,
     doctor_report,
+    install_plugin,
     install_mcp_setup,
     install_skill,
     inspect_setup_target,
@@ -307,6 +309,11 @@ def build_parser() -> argparse.ArgumentParser:
     skill_export.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
     skill_export.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
 
+    plugin = sub.add_parser("plugin")
+    plugin_sub = plugin.add_subparsers(dest="plugin_command", required=True)
+    plugin_install = plugin_sub.add_parser("install")
+    plugin_install.add_argument("tool", choices=list(SUPPORTED_PLUGIN_TARGETS))
+
     sub.add_parser("doctor")
 
     daemon = sub.add_parser("daemon")
@@ -448,14 +455,14 @@ def main(argv: list[str] | None = None) -> int:
             _emit(
                 install_mcp_setup(args.tool, settings, cwd=cwd, scope=args.scope),
                 as_json=args.json,
-                renderer=lambda payload: render_install_result(payload, heading="MCP setup written"),
+                renderer=lambda payload: render_install_result(payload, heading="Setup applied"),
             )
             return 0
         if args.setup_command == "remove":
             _emit(
                 remove_mcp_setup(args.tool, cwd=cwd, scope=args.scope),
                 as_json=args.json,
-                renderer=lambda payload: render_install_result(payload, heading="MCP setup removed"),
+                renderer=lambda payload: render_install_result(payload, heading="Setup removed"),
             )
             return 0
 
@@ -469,6 +476,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.skill_command == "export":
             _print(export_skill(args.tool, variant=args.variant))
+            return 0
+
+    if command == "plugin":
+        if args.plugin_command == "install":
+            settings = load_settings(ensure_dirs=False)
+            _emit(
+                install_plugin(args.tool, settings, cwd=cwd),
+                as_json=args.json,
+                renderer=lambda payload: render_install_result(payload, heading="Plugin installed"),
+            )
             return 0
 
     if command == "doctor":

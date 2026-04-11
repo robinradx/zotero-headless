@@ -3,12 +3,17 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 from zotero_headless.agent_setup import (
+    CLAUDE_CODE_PLUGIN_NAME,
+    CODEX_PLUGIN_NAME,
     SERVER_NAME,
     doctor_report,
     export_skill,
     install_mcp_setup,
+    install_plugin,
     install_skill,
     remove_mcp_setup,
     skill_target_path,
@@ -95,6 +100,64 @@ class AgentSetupTests(unittest.TestCase):
             self.assertEqual(Path(result["path"]).resolve(), path.resolve())
             self.assertIn(SERVER_NAME, payload["mcpServers"])
 
+    @patch("zotero_headless.agent_setup.subprocess.run")
+    @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
+    def test_install_openclaw_setup_runs_plugin_install_and_enable(self, _which, run_mock):
+        run_mock.side_effect = [
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            cwd = home / "project"
+            plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+
+            result = install_mcp_setup("openclaw", Settings(), cwd=cwd, home=home, scope="user")
+
+            self.assertTrue(result["written"])
+            self.assertEqual(result["config"]["plugin_id"], "zotero")
+            self.assertEqual(Path(result["config"]["plugin_path"]).resolve(), plugin_dir.resolve())
+            self.assertEqual(run_mock.call_args_list[0].args[0], ["/usr/local/bin/openclaw", "plugins", "install", "-l", str(plugin_dir.resolve())])
+            self.assertEqual(run_mock.call_args_list[1].args[0], ["/usr/local/bin/openclaw", "plugins", "enable", "zotero"])
+
+    @patch("zotero_headless.agent_setup.shutil.which", return_value=None)
+    def test_install_openclaw_setup_returns_instructions_when_cli_missing(self, _which):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            cwd = home / "project"
+            plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+
+            result = install_mcp_setup("openclaw", Settings(), cwd=cwd, home=home, scope="user")
+
+            self.assertFalse(result["written"])
+            self.assertEqual(result["reason"], "openclaw_not_found")
+            self.assertTrue(any("openclaw plugins install -l" in line for line in result["instructions"]))
+
+    @patch("zotero_headless.agent_setup.subprocess.run")
+    @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
+    def test_install_plugin_for_openclaw_runs_plugin_install_and_enable(self, _which, run_mock):
+        run_mock.side_effect = [
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+            plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+
+            result = install_plugin("openclaw", Settings(), cwd=cwd, home=home)
+
+            self.assertTrue(result["installed"])
+            self.assertEqual(Path(result["config"]["plugin_path"]).resolve(), plugin_dir.resolve())
+            self.assertEqual(run_mock.call_args_list[0].args[0], ["/usr/local/bin/openclaw", "plugins", "install", "-l", str(plugin_dir.resolve())])
+            self.assertEqual(run_mock.call_args_list[1].args[0], ["/usr/local/bin/openclaw", "plugins", "enable", "zotero"])
+
     def test_install_windsurf_setup_writes_user_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -153,6 +216,22 @@ class AgentSetupTests(unittest.TestCase):
             entry = next(item for item in targets if item["target"] == "antigravity")
             self.assertFalse(entry["installed"])
 
+    @patch("zotero_headless.agent_setup.subprocess.run")
+    @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
+    def test_setup_list_reports_openclaw_install_state(self, _which, run_mock):
+        run_mock.return_value = CompletedProcess(args=["openclaw"], returncode=0, stdout='{"id":"zotero"}', stderr="")
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            cwd = home / "project"
+            cwd.mkdir(parents=True)
+            path = home / ".openclaw" / "openclaw.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}", encoding="utf-8")
+
+            targets = setup_list(Settings(), cwd=cwd, home=home)
+            entry = next(item for item in targets if item["target"] == "openclaw")
+            self.assertTrue(entry["installed"])
+
     def test_install_skill_for_codex_writes_skill_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -163,6 +242,86 @@ class AgentSetupTests(unittest.TestCase):
             self.assertEqual(result["path"], str(skill_path))
             self.assertIn("Zotero Headless", skill_path.read_text(encoding="utf-8"))
             self.assertEqual(result["variant"], "general")
+
+    def test_install_plugin_for_codex_copies_bundle_and_updates_marketplace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+            source = cwd / "plugins" / CODEX_PLUGIN_NAME
+            (source / ".codex-plugin").mkdir(parents=True, exist_ok=True)
+            (source / "skills" / SERVER_NAME).mkdir(parents=True, exist_ok=True)
+            (source / "skills" / "zotero-search").mkdir(parents=True, exist_ok=True)
+            (source / "agents").mkdir(parents=True, exist_ok=True)
+            (source / "scripts").mkdir(parents=True, exist_ok=True)
+            (source / ".codex-plugin" / "plugin.json").write_text('{"name":"zotero-headless-codex"}\n', encoding="utf-8")
+            (source / ".mcp.json").write_text('{"mcpServers":{}}\n', encoding="utf-8")
+            (source / "hooks.json").write_text('{"hooks":{}}\n', encoding="utf-8")
+            (source / "skills" / SERVER_NAME / "SKILL.md").write_text("# Rich Core Skill\n", encoding="utf-8")
+            (source / "skills" / "zotero-search" / "SKILL.md").write_text("# Search Skill\n", encoding="utf-8")
+            (source / "agents" / "library-researcher.md").write_text("research agent\n", encoding="utf-8")
+            (source / "scripts" / "session-status.sh").write_text("#!/bin/bash\n", encoding="utf-8")
+
+            result = install_plugin("codex", Settings(api_key="test-key", state_dir=str(home / "state")), cwd=cwd, home=home)
+
+            destination = home / "plugins" / CODEX_PLUGIN_NAME
+            self.assertTrue(result["installed"])
+            self.assertEqual(Path(result["path"]).resolve(), destination.resolve())
+            self.assertTrue((destination / ".codex-plugin" / "plugin.json").exists())
+            installed_mcp = json.loads((destination / ".mcp.json").read_text(encoding="utf-8"))
+            self.assertIn(SERVER_NAME, installed_mcp["mcpServers"])
+            skill_path = destination / "skills" / SERVER_NAME / "SKILL.md"
+            self.assertTrue(skill_path.exists())
+            self.assertIn("Rich Core Skill", skill_path.read_text(encoding="utf-8"))
+            self.assertTrue((destination / "skills" / "zotero-search" / "SKILL.md").exists())
+            self.assertTrue((destination / "agents" / "library-researcher.md").exists())
+            self.assertTrue((destination / "hooks.json").exists())
+            self.assertTrue((destination / "scripts" / "session-status.sh").exists())
+            marketplace = json.loads((home / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8"))
+            self.assertTrue(any(entry.get("name") == CODEX_PLUGIN_NAME for entry in marketplace["plugins"]))
+
+    def test_install_plugin_for_claude_code_copies_bundle_and_writes_mcp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+            source = cwd / "plugins" / CLAUDE_CODE_PLUGIN_NAME
+            (source / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+            (source / "skills" / SERVER_NAME).mkdir(parents=True, exist_ok=True)
+            (source / ".claude-plugin" / "plugin.json").write_text('{"name":"zotero-headless"}\n', encoding="utf-8")
+            (source / ".mcp.json").write_text('{"mcpServers":{}}\n', encoding="utf-8")
+            (source / "skills" / SERVER_NAME / "SKILL.md").write_text("# Zotero Headless\n", encoding="utf-8")
+
+            result = install_plugin("claude-code", Settings(api_key="test-key", state_dir=str(home / "state")), cwd=cwd, home=home)
+
+            destination = home / ".claude" / "plugins" / CLAUDE_CODE_PLUGIN_NAME
+            self.assertTrue(result["installed"])
+            self.assertEqual(Path(result["path"]).resolve(), destination.resolve())
+            self.assertTrue((destination / ".claude-plugin" / "plugin.json").exists())
+            installed_mcp = json.loads((destination / ".mcp.json").read_text(encoding="utf-8"))
+            self.assertIn(SERVER_NAME, installed_mcp["mcpServers"])
+            skill_path = destination / "skills" / SERVER_NAME / "SKILL.md"
+            self.assertTrue(skill_path.exists())
+
+    def test_install_plugin_for_claude_code_returns_error_when_source_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+            cwd.mkdir(parents=True)
+
+            result = install_plugin("claude-code", Settings(), cwd=cwd, home=home)
+
+            self.assertFalse(result["installed"])
+            self.assertEqual(result["reason"], "plugin_source_not_found")
+
+    def test_install_skill_for_openclaw_writes_skill_file_in_openclaw_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+
+            result = install_skill("openclaw", home=home)
+
+            skill_path = home / ".openclaw" / "skills" / SERVER_NAME / "SKILL.md"
+            self.assertEqual(result["path"], str(skill_path))
+            self.assertTrue(skill_path.exists())
+            self.assertIn("native OpenClaw Zotero plugin", skill_path.read_text(encoding="utf-8"))
 
     def test_install_skill_for_all_supported_targets_writes_skill_file(self):
         targets = ("cline", "antigravity", "openclaw", "codex", "opencode", "claude-code", "gemini-cli")
@@ -245,6 +404,12 @@ class AgentSetupTests(unittest.TestCase):
         self.assertIn("- Use qmd semantic search for:", exported["content"])
         self.assertIn("This skill is uploaded manually into Claude Desktop or claude.ai", exported["content"])
         self.assertIn("Prefer the HTTP API when you can reach a running `zotero-headless` daemon directly.", exported["content"])
+
+    def test_export_skill_for_openclaw_mentions_native_plugin_flow(self):
+        exported = export_skill("openclaw")
+        self.assertEqual(exported["target"], "openclaw")
+        self.assertIn("native OpenClaw Zotero plugin", exported["content"])
+        self.assertIn("without a separate MCP bridge", exported["content"])
 
     def test_doctor_report_includes_setup_targets_and_cli_checks(self):
         with tempfile.TemporaryDirectory() as tmp:

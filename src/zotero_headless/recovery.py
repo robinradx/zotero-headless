@@ -502,6 +502,11 @@ class RecoveryService:
             return []
         with closing(sqlite3.connect(canonical_db_path)) as conn:
             conn.row_factory = sqlite3.Row
+            table_exists = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='libraries'"
+            ).fetchone()[0]
+            if not table_exists:
+                return []
             libraries = conn.execute(
                 """
                 SELECT library_id, library_kind, library_key, name, source, editable, metadata_json

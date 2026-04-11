@@ -53,6 +53,46 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("codex", output)
         self.assertIn("/tmp/codex-config.toml", output)
 
+    def test_plugin_install_uses_human_output_by_default(self):
+        buffer = io.StringIO()
+        fake_result = {
+            "target": "codex",
+            "installed": True,
+            "path": "/tmp/home/plugins/zotero-headless-codex",
+            "instructions": ["Restart Codex if needed."],
+        }
+        with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
+            "zotero_headless.cli.install_plugin",
+            return_value=fake_result,
+        ), redirect_stdout(buffer):
+            exit_code = main(["plugin", "install", "codex"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Plugin installed", output)
+        self.assertIn("codex", output)
+        self.assertIn("/tmp/home/plugins/zotero-headless-codex", output)
+
+    def test_plugin_install_openclaw_uses_human_output_by_default(self):
+        buffer = io.StringIO()
+        fake_result = {
+            "target": "openclaw",
+            "installed": True,
+            "path": "/tmp/home/.openclaw/openclaw.json",
+            "instructions": ["Inspect the plugin with openclaw plugins inspect zotero."],
+        }
+        with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
+            "zotero_headless.cli.install_plugin",
+            return_value=fake_result,
+        ), redirect_stdout(buffer):
+            exit_code = main(["plugin", "install", "openclaw"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Plugin installed", output)
+        self.assertIn("openclaw", output)
+        self.assertIn("/tmp/home/.openclaw/openclaw.json", output)
+
     def test_citations_status_can_emit_json(self):
         buffer = io.StringIO()
         with patch(

@@ -51,8 +51,20 @@ Install or export skill material:
 
 ```text
 zhl skill install codex
+zhl skill install openclaw
 zhl skill export claude-desktop
 ```
+
+Install the repo-local Codex plugin bundle:
+
+```text
+zhl plugin install codex
+zhl plugin install openclaw
+```
+
+The Codex bundle includes the MCP config, a focused Zotero skill pack, research and sync agents, and a startup status hook.
+
+For OpenClaw's native integration, run `zhl plugin install openclaw`. That shells out to `openclaw plugins install -l ./plugins/openclaw-plugin-zotero` and then enables `zotero`.
 
 ## Local Desktop Commands
 

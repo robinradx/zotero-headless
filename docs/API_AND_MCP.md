@@ -56,6 +56,24 @@ zhl setup add cursor --scope project
 zhl setup add claude-code --scope project
 ```
 
+To install the repo-local Codex plugin bundle:
+
+```text
+zhl plugin install codex
+zhl plugin install openclaw
+```
+
+This copies `./plugins/zotero-headless-codex` into `~/plugins/zotero-headless-codex`, rewrites its bundled `.mcp.json` from your current local settings, preserves the bundled Zotero skill pack, agents, and startup hook, and adds or updates the home-local marketplace entry at `~/.agents/plugins/marketplace.json`.
+
+OpenClaw uses its native plugin system instead of MCP:
+
+```text
+zhl plugin install openclaw
+zhl skill install openclaw
+```
+
+`zhl plugin install openclaw` shells out to the OpenClaw CLI and installs the linked local plugin from `./plugins/openclaw-plugin-zotero`, then enables `zotero`.
+
 To inspect what was written:
 
 ```text
@@ -70,6 +88,7 @@ Some clients benefit from a matching skill pack:
 zhl skill install codex
 zhl skill install claude-code
 zhl skill install gemini-cli
+zhl skill install openclaw
 ```
 
 This is separate from the MCP server itself. MCP gives the client tool access; the skill gives the agent a better prompt/workflow layer.

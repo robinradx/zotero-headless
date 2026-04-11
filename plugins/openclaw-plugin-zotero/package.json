@@ -1,0 +1,23 @@
+{
+  "name": "openclaw-plugin-zotero",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"],
+    "compat": ">=2026.3.0"
+  },
+  "dependencies": {
+    "openclaw": "^2026.3.0"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "^0.34.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}

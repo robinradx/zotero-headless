@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,10 @@ from .utils import ensure_dir
 
 
 SERVER_NAME = "zotero-headless"
+OPENCLAW_PLUGIN_ID = "zotero"
+OPENCLAW_PLUGIN_DIRNAME = "openclaw-plugin-zotero"
+CODEX_PLUGIN_NAME = "zotero-headless-codex"
+CLAUDE_CODE_PLUGIN_NAME = "zotero-headless-claude-code"
 SUPPORTED_SETUP_TARGETS = (
     "codex",
     "claude-code",
@@ -20,9 +25,11 @@ SUPPORTED_SETUP_TARGETS = (
     "gemini",
     "cline",
     "antigravity",
+    "openclaw",
     "windsurf",
     "json",
 )
+SUPPORTED_PLUGIN_TARGETS = ("codex", "claude-code", "openclaw")
 SUPPORTED_SKILL_TARGETS = (
     "cline",
     "antigravity",
@@ -34,7 +41,7 @@ SUPPORTED_SKILL_TARGETS = (
     "gemini-cli",
 )
 SUPPORTED_SKILL_VARIANTS = ("general", "daemon")
-USER_SCOPE_ONLY_TARGETS = {"codex", "claude-desktop", "gemini", "cline", "antigravity", "windsurf"}
+USER_SCOPE_ONLY_TARGETS = {"codex", "claude-desktop", "gemini", "cline", "antigravity", "openclaw", "windsurf"}
 PROJECT_OR_USER_TARGETS = {"cursor"}
 PROJECT_ONLY_TARGETS = {"claude-code"}
 
@@ -150,6 +157,225 @@ def _remove_mcp_server(payload: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _openclaw_binary() -> str | None:
+    return shutil.which("openclaw")
+
+
+def _openclaw_plugin_candidates(*, cwd: Path | None = None) -> list[Path]:
+    base = (cwd or Path.cwd()).resolve()
+    candidates = [
+        base / "plugins" / OPENCLAW_PLUGIN_DIRNAME,
+        base / "openclaw-plugin-zotero",
+        base / OPENCLAW_PLUGIN_DIRNAME,
+    ]
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(resolved)
+    return unique
+
+
+def _openclaw_plugin_path(*, cwd: Path | None = None) -> Path:
+    for candidate in _openclaw_plugin_candidates(cwd=cwd):
+        if candidate.exists():
+            return candidate
+    return _openclaw_plugin_candidates(cwd=cwd)[0]
+
+
+def _openclaw_setup_instructions(*, cwd: Path | None = None) -> list[str]:
+    plugin_path = _openclaw_plugin_path(cwd=cwd)
+    return [
+        f"Run `openclaw plugins install -l {plugin_path}` to link the local Zotero plugin into OpenClaw.",
+        f"Run `openclaw plugins enable {OPENCLAW_PLUGIN_ID}` to enable it.",
+        "Edit `~/.openclaw/openclaw.json` if you need to adjust daemon host, port, or per-library permissions.",
+    ]
+
+
+def _install_openclaw_plugin(
+    *,
+    cwd: Path | None = None,
+    home: Path | None = None,
+    scope: str = "user",
+) -> dict[str, Any]:
+    plugin_path = _openclaw_plugin_path(cwd=cwd)
+    config_path = setup_target_path("openclaw", cwd=cwd, home=home, scope=scope)
+    assert config_path is not None
+    binary = _openclaw_binary()
+    if not plugin_path.exists():
+        return {
+            "target": "openclaw",
+            "written": False,
+            "installed": False,
+            "path": str(config_path),
+            "scope": scope,
+            "reason": "plugin_not_found",
+            "instructions": _openclaw_setup_instructions(cwd=cwd),
+        }
+    if not binary:
+        return {
+            "target": "openclaw",
+            "written": False,
+            "installed": False,
+            "path": str(config_path),
+            "scope": scope,
+            "reason": "openclaw_not_found",
+            "instructions": _openclaw_setup_instructions(cwd=cwd),
+        }
+    install = subprocess.run(
+        [binary, "plugins", "install", "-l", str(plugin_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if install.returncode != 0:
+        return {
+            "target": "openclaw",
+            "written": False,
+            "installed": False,
+            "path": str(config_path),
+            "scope": scope,
+            "reason": "openclaw_install_failed",
+            "stdout": install.stdout,
+            "stderr": install.stderr,
+            "instructions": _openclaw_setup_instructions(cwd=cwd),
+        }
+    enable = subprocess.run(
+        [binary, "plugins", "enable", OPENCLAW_PLUGIN_ID],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return {
+        "target": "openclaw",
+        "written": enable.returncode == 0,
+        "installed": enable.returncode == 0,
+        "path": str(config_path),
+        "scope": scope,
+        "config": {
+            "plugin_id": OPENCLAW_PLUGIN_ID,
+            "plugin_path": str(plugin_path),
+        },
+        "stdout": "\n".join(part for part in (install.stdout.strip(), enable.stdout.strip()) if part),
+        "stderr": "\n".join(part for part in (install.stderr.strip(), enable.stderr.strip()) if part),
+        "instructions": [
+            f"Inspect the plugin with `openclaw plugins inspect {OPENCLAW_PLUGIN_ID}`.",
+            "Install the matching skill with `zhl skill install openclaw` for better agent routing.",
+        ],
+    }
+
+
+def _codex_plugin_source_path(*, cwd: Path | None = None) -> Path:
+    base = (cwd or Path.cwd()).resolve()
+    return (base / "plugins" / CODEX_PLUGIN_NAME).resolve()
+
+
+def _codex_plugin_install_path(*, home: Path | None = None) -> Path:
+    root = (home or Path.home()).expanduser()
+    return root / "plugins" / CODEX_PLUGIN_NAME
+
+
+def _claude_code_plugin_source_path(*, cwd: Path | None = None) -> Path:
+    base = (cwd or Path.cwd()).resolve()
+    return (base / "plugins" / CLAUDE_CODE_PLUGIN_NAME).resolve()
+
+
+def _claude_code_plugin_install_path(*, home: Path | None = None) -> Path:
+    root = (home or Path.home()).expanduser()
+    return root / ".claude" / "plugins" / CLAUDE_CODE_PLUGIN_NAME
+
+
+def _codex_plugin_marketplace_path(*, home: Path | None = None) -> Path:
+    root = (home or Path.home()).expanduser()
+    return root / ".agents" / "plugins" / "marketplace.json"
+
+
+def _codex_marketplace_entry() -> dict[str, Any]:
+    return {
+        "name": CODEX_PLUGIN_NAME,
+        "source": {
+            "source": "local",
+            "path": f"./plugins/{CODEX_PLUGIN_NAME}",
+        },
+        "policy": {
+            "installation": "AVAILABLE",
+            "authentication": "ON_INSTALL",
+        },
+        "category": "Research",
+    }
+
+
+def _update_codex_marketplace(*, home: Path | None = None) -> Path:
+    path = _codex_plugin_marketplace_path(home=home)
+    payload = _read_json_file(path) if path.exists() else {}
+    if not payload:
+        payload = {
+            "name": "local-plugins",
+            "interface": {
+                "displayName": "Local Plugins",
+            },
+            "plugins": [],
+        }
+    plugins = payload.get("plugins")
+    if not isinstance(plugins, list):
+        plugins = []
+    entry = _codex_marketplace_entry()
+    replaced = False
+    for index, existing in enumerate(plugins):
+        if isinstance(existing, dict) and existing.get("name") == CODEX_PLUGIN_NAME:
+            plugins[index] = entry
+            replaced = True
+            break
+    if not replaced:
+        plugins.append(entry)
+    payload["plugins"] = plugins
+    interface = payload.get("interface")
+    if not isinstance(interface, dict):
+        payload["interface"] = {"displayName": "Local Plugins"}
+    elif not interface.get("displayName"):
+        interface["displayName"] = "Local Plugins"
+    if not payload.get("name"):
+        payload["name"] = "local-plugins"
+    _write_json_file(path, payload)
+    return path
+
+
+def _install_claude_code_plugin(
+    *,
+    settings: Settings,
+    cwd: Path | None = None,
+    home: Path | None = None,
+) -> dict[str, Any]:
+    source = _claude_code_plugin_source_path(cwd=cwd)
+    destination = _claude_code_plugin_install_path(home=home)
+    if not source.exists():
+        return {
+            "target": "claude-code",
+            "installed": False,
+            "path": str(destination),
+            "reason": "plugin_source_not_found",
+            "instructions": [
+                f"Expected the source plugin at `{source}`.",
+            ],
+        }
+    ensure_dir(destination.parent)
+    shutil.copytree(source, destination, dirs_exist_ok=True)
+    _write_json_file(destination / ".mcp.json", mcp_json_document(settings))
+    return {
+        "target": "claude-code",
+        "installed": True,
+        "path": str(destination),
+        "source_path": str(source),
+        "instructions": [
+            "Restart Claude Code for the plugin to take effect.",
+            f"Plugin installed at `{destination}`.",
+        ],
+    }
+
+
 def setup_target_path(
     target: str,
     *,
@@ -179,6 +405,8 @@ def setup_target_path(
         return home / ".cline" / "data" / "settings" / "cline_mcp_settings.json"
     if target == "antigravity":
         return home / ".gemini" / "antigravity" / "mcp_config.json"
+    if target == "openclaw":
+        return home / ".openclaw" / "openclaw.json"
     if target == "windsurf":
         return home / ".codeium" / "windsurf" / "mcp_config.json"
     if target == "json":
@@ -196,6 +424,8 @@ def install_mcp_setup(
 ) -> dict[str, Any]:
     if target not in SUPPORTED_SETUP_TARGETS:
         raise ValueError(f"Unsupported setup target: {target}")
+    if target == "openclaw":
+        return _install_openclaw_plugin(cwd=cwd, home=home, scope=scope)
     spec = mcp_stdio_spec(settings)
     if target == "json":
         return {
@@ -234,6 +464,27 @@ def remove_mcp_setup(
 ) -> dict[str, Any]:
     if target not in SUPPORTED_SETUP_TARGETS or target == "json":
         raise ValueError(f"Unsupported removable setup target: {target}")
+    if target == "openclaw":
+        path = setup_target_path(target, cwd=cwd, home=home, scope=scope)
+        assert path is not None
+        binary = _openclaw_binary()
+        if not binary:
+            return {"target": target, "removed": False, "path": str(path), "scope": scope, "reason": "openclaw_not_found"}
+        result = subprocess.run(
+            [binary, "plugins", "uninstall", OPENCLAW_PLUGIN_ID],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return {
+            "target": target,
+            "removed": result.returncode == 0,
+            "path": str(path),
+            "scope": scope,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "reason": None if result.returncode == 0 else "openclaw_uninstall_failed",
+        }
     path = setup_target_path(target, cwd=cwd, home=home, scope=scope)
     assert path is not None
     if not path.exists():
@@ -256,6 +507,28 @@ def inspect_setup_target(
     scope: str = "project",
 ) -> dict[str, Any]:
     path = setup_target_path(target, cwd=cwd, home=home, scope=scope)
+    if target == "openclaw":
+        binary = _openclaw_binary()
+        if binary:
+            inspected = subprocess.run(
+                [binary, "plugins", "inspect", OPENCLAW_PLUGIN_ID, "--json"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            installed = inspected.returncode == 0
+        else:
+            installed = False
+        return {
+            "target": target,
+            "path": str(path) if path else None,
+            "installed": installed,
+            "scope": scope,
+            "config": {
+                "plugin_id": OPENCLAW_PLUGIN_ID,
+                "plugin_path": str(_openclaw_plugin_path(cwd=cwd)),
+            },
+        }
     installed = False
     if path and path.exists():
         if target == "codex":
@@ -282,10 +555,55 @@ def setup_list(settings: Settings, *, cwd: Path | None = None, home: Path | None
         inspect_setup_target("gemini", settings, cwd=cwd, home=home, scope="user"),
         inspect_setup_target("cline", settings, cwd=cwd, home=home, scope="user"),
         inspect_setup_target("antigravity", settings, cwd=cwd, home=home, scope="user"),
+        inspect_setup_target("openclaw", settings, cwd=cwd, home=home, scope="user"),
         inspect_setup_target("windsurf", settings, cwd=cwd, home=home, scope="user"),
         inspect_setup_target("json", settings, cwd=cwd, home=home, scope="project"),
     ]
     return entries
+
+
+def install_plugin(
+    target: str,
+    settings: Settings,
+    *,
+    cwd: Path | None = None,
+    home: Path | None = None,
+) -> dict[str, Any]:
+    if target not in SUPPORTED_PLUGIN_TARGETS:
+        raise ValueError(f"Unsupported plugin target: {target}")
+    if target == "openclaw":
+        return _install_openclaw_plugin(cwd=cwd, home=home, scope="user")
+    if target == "claude-code":
+        return _install_claude_code_plugin(settings=settings, cwd=cwd, home=home)
+    if target != "codex":
+        raise ValueError(f"Unsupported plugin target: {target}")
+    source = _codex_plugin_source_path(cwd=cwd)
+    if not source.exists():
+        return {
+            "target": target,
+            "installed": False,
+            "path": str(_codex_plugin_install_path(home=home)),
+            "reason": "plugin_source_not_found",
+            "instructions": [
+                f"Expected the source plugin at `{source}`.",
+            ],
+        }
+    destination = _codex_plugin_install_path(home=home)
+    ensure_dir(destination.parent)
+    shutil.copytree(source, destination, dirs_exist_ok=True)
+    _write_json_file(destination / ".mcp.json", mcp_json_document(settings))
+    marketplace = _update_codex_marketplace(home=home)
+    return {
+        "target": target,
+        "installed": True,
+        "path": str(destination),
+        "source_path": str(source),
+        "marketplace_path": str(marketplace),
+        "instructions": [
+            "Restart Codex or refresh plugins if the new local plugin does not appear immediately.",
+            f"The installed marketplace entry points at `./plugins/{CODEX_PLUGIN_NAME}` under your home directory.",
+        ],
+    }
 
 
 def _target_label(target: str) -> str:
@@ -317,10 +635,16 @@ def _target_specific_notes(target: str) -> list[str]:
             "- Prefer the HTTP API when you can reach a running `zotero-headless` daemon directly.",
             "- Use MCP only after the separate Claude Desktop MCP config has been installed.",
         ]
-    if target in {"codex", "claude-code", "cline", "antigravity", "openclaw", "opencode"}:
+    if target in {"codex", "claude-code", "cline", "antigravity", "opencode"}:
         return [
             "- This client is comfortable with MCP tool use. Prefer MCP for exact reads and mutations when the server is installed.",
             "- If the client can also call HTTP directly, prefer the API for stable structured integrations or remote daemon access.",
+        ]
+    if target == "openclaw":
+        return [
+            "- Install or refresh the OpenClaw plugin with `zhl setup add openclaw --scope user` when working from this repository.",
+            "- Prefer the native OpenClaw Zotero plugin when it is installed and enabled; it exposes tools directly without a separate MCP bridge.",
+            "- Configure the plugin against a reachable `zotero-headless` daemon and drop to the HTTP API when you need lower-level inspection or remote debugging.",
         ]
     if target == "gemini-cli":
         return [
@@ -479,7 +803,7 @@ def skill_target_path(target: str, *, home: Path | None = None, variant: str = "
     if target == "antigravity":
         return home / ".gemini" / "antigravity" / "skills" / SERVER_NAME / "SKILL.md"
     if target == "openclaw":
-        return home / ".moltbot" / "skills" / SERVER_NAME / "SKILL.md"
+        return home / ".openclaw" / "skills" / SERVER_NAME / "SKILL.md"
     if target == "opencode":
         return home / ".config" / "opencode" / "skill" / SERVER_NAME / "SKILL.md"
     raise ValueError(f"Unsupported skill target: {target}")

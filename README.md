@@ -464,7 +464,15 @@ zotero-headless setup add cursor --scope project
 zotero-headless setup add gemini --scope user
 zotero-headless setup add cline --scope user
 zotero-headless setup add antigravity --scope user
+zotero-headless setup add openclaw --scope user
 zotero-headless setup add windsurf --scope user
+```
+
+Codex plugin bundle:
+
+```text
+zotero-headless plugin install codex
+zotero-headless plugin install openclaw
 ```
 
 Agent skill helpers:
@@ -481,6 +489,17 @@ zotero-headless skill install opencode
 ```
 
 `zotero-headless skill add claude-desktop` generates a Claude skill archive on your Desktop. Upload that archive in the Skills section of Claude Desktop or on claude.ai.
+
+OpenClaw plugin bundle:
+
+```text
+zotero-headless plugin install openclaw
+zotero-headless skill install openclaw
+```
+
+`zotero-headless plugin install codex` copies the repo-local plugin bundle from `./plugins/zotero-headless-codex` into `~/plugins/zotero-headless-codex`, refreshes its bundled `.mcp.json` from your local settings, preserves the bundled Zotero skill pack, agents, and startup hook, and adds or updates the home-local marketplace entry at `~/.agents/plugins/marketplace.json`.
+
+`zotero-headless plugin install openclaw` runs the linked local plugin install and enable flow for `./plugins/openclaw-plugin-zotero` in this repo. OpenClaw loads shared local skills from `~/.openclaw/skills`, and the Zotero plugin reads its runtime config from `~/.openclaw/openclaw.json`.
 
 ## Roadmap
 

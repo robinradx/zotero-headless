@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -132,15 +133,32 @@ def build_update_plan(
 
 
 def run_update(plan: UpdatePlan) -> dict[str, object]:
+    before_version = current_version()
     if not plan.auto_supported or not plan.command:
         return {
             "updated": False,
+            "command_succeeded": False,
+            "already_current": False,
+            "before_version": before_version,
+            "after_version": before_version,
+            "duration_seconds": 0.0,
             "plan": plan.to_dict(),
             "message": "Automatic update is not supported for this install method.",
         }
+    started = time.monotonic()
     completed = subprocess.run(plan.command, check=False, capture_output=True, text=True)
+    duration_seconds = time.monotonic() - started
+    after_version = current_version()
+    command_succeeded = completed.returncode == 0
+    updated = command_succeeded and after_version != before_version
+    already_current = command_succeeded and after_version == before_version
     return {
-        "updated": completed.returncode == 0,
+        "updated": updated,
+        "command_succeeded": command_succeeded,
+        "already_current": already_current,
+        "before_version": before_version,
+        "after_version": after_version,
+        "duration_seconds": duration_seconds,
         "returncode": completed.returncode,
         "plan": plan.to_dict(),
         "stdout": completed.stdout,

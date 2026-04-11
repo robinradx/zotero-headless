@@ -45,7 +45,7 @@ from .config import Settings, load_settings, save_settings
 from .core import CanonicalStore, ChangeType, EntityType
 from .daemon import build_daemon_command, build_runtime_command, current_daemon_status, serve_daemon_runtime
 from .library_routing import merged_libraries, prefers_canonical_reads
-from .installer_update import build_update_plan, run_update, version_payload
+from .installer_update import build_update_plan, current_version, run_update, version_payload
 from .local_db import LocalZoteroDB
 from .mcp import run_stdio_server
 from .qmd import QmdAutoIndexer, QmdClient
@@ -431,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     if command == "update":
         plan = build_update_plan()
         if args.check:
-            _emit({"plan": plan.to_dict()}, as_json=args.json, renderer=render_update_plan)
+            _emit({"plan": plan.to_dict(), "current_version": current_version()}, as_json=args.json, renderer=render_update_plan)
             return 0
         payload = run_update(plan)
         if payload.get("updated"):

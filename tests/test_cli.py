@@ -172,7 +172,16 @@ class CliOutputTests(unittest.TestCase):
     def test_update_command_refreshes_installed_integrations_after_success(self):
         buffer = io.StringIO()
         plan = UpdatePlan(method="uv-tool", command=["uv", "tool", "upgrade", "zotero-headless"], auto_supported=True, reason="test")
-        update_result = {"updated": True, "plan": plan.to_dict(), "stdout": "", "stderr": ""}
+        update_result = {
+            "updated": True,
+            "command_succeeded": True,
+            "already_current": False,
+            "before_version": "0.1.0",
+            "after_version": "0.2.0",
+            "plan": plan.to_dict(),
+            "stdout": "",
+            "stderr": "",
+        }
         refresh_result = {
             "skills": [{"target": "codex"}],
             "plugins": [{"target": "claude-code"}, {"target": "openclaw"}],
@@ -190,6 +199,7 @@ class CliOutputTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         output = buffer.getvalue()
         self.assertIn("Updated: yes", output)
+        self.assertIn("Version: 0.1.0 -> 0.2.0", output)
         self.assertIn("Post-update refresh:", output)
         self.assertIn("Skills refreshed: 1", output)
         self.assertIn("Plugins refreshed: 2", output)
@@ -197,7 +207,17 @@ class CliOutputTests(unittest.TestCase):
     def test_update_command_skips_post_refresh_after_failed_update(self):
         buffer = io.StringIO()
         plan = UpdatePlan(method="uv-tool", command=["uv", "tool", "upgrade", "zotero-headless"], auto_supported=True, reason="test")
-        update_result = {"updated": False, "plan": plan.to_dict(), "stdout": "", "stderr": "", "message": "failed"}
+        update_result = {
+            "updated": False,
+            "command_succeeded": False,
+            "already_current": False,
+            "before_version": "0.2.0",
+            "after_version": "0.2.0",
+            "plan": plan.to_dict(),
+            "stdout": "",
+            "stderr": "",
+            "message": "failed",
+        }
         with patch("zotero_headless.cli.build_update_plan", return_value=plan), patch(
             "zotero_headless.cli.run_update",
             return_value=update_result,
@@ -209,6 +229,31 @@ class CliOutputTests(unittest.TestCase):
         output = buffer.getvalue()
         self.assertIn("Updated: no", output)
         self.assertNotIn("Post-update refresh:", output)
+
+    def test_update_command_reports_already_current_when_version_does_not_change(self):
+        buffer = io.StringIO()
+        plan = UpdatePlan(method="uv-tool", command=["uv", "tool", "upgrade", "zotero-headless"], auto_supported=True, reason="test")
+        update_result = {
+            "updated": False,
+            "command_succeeded": True,
+            "already_current": True,
+            "before_version": "0.2.0",
+            "after_version": "0.2.0",
+            "plan": plan.to_dict(),
+            "stdout": "",
+            "stderr": "Nothing to upgrade",
+        }
+        with patch("zotero_headless.cli.build_update_plan", return_value=plan), patch(
+            "zotero_headless.cli.run_update",
+            return_value=update_result,
+        ), patch("zotero_headless.cli.refresh_installed_integrations") as refresh_mock, redirect_stdout(buffer):
+            exit_code = main(["update"])
+
+        self.assertEqual(exit_code, 0)
+        refresh_mock.assert_not_called()
+        output = buffer.getvalue()
+        self.assertIn("Status: already current", output)
+        self.assertIn("Version: 0.2.0 -> 0.2.0", output)
 
     def test_citations_status_can_emit_json(self):
         buffer = io.StringIO()

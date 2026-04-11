@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 import typer
-from rich.console import Console
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.pretty import Pretty
 from rich.table import Table
@@ -38,18 +38,26 @@ from .cli_ui import (
     render_daemon_command,
     render_daemon_status,
     render_doctor_report,
+    render_doctor_report_rich,
     render_install_result,
+    render_install_result_rich,
     render_text_list,
     render_setup_result,
+    render_setup_result_rich,
     render_setup_target,
+    render_setup_target_rich,
     render_update_plan,
+    render_update_plan_rich,
     render_update_result,
+    render_update_result_rich,
     render_version_payload,
+    render_version_payload_rich,
 )
 from .config import Settings, load_settings, save_settings
 from .core import CanonicalStore, EntityType
 from .daemon import build_daemon_command, build_runtime_command, current_daemon_status, serve_daemon_runtime
 from .installer_update import build_update_plan, run_update, version_payload
+from .installer_update import current_version
 from .local_db import LocalZoteroDB
 from .mcp import run_stdio_server
 from .qmd import QmdAutoIndexer, QmdClient
@@ -111,19 +119,17 @@ def _emit(ctx: typer.Context, payload, *, renderer=None, title: str | None = Non
         return
     content = renderer(payload)
     if title:
-        console.print(Panel.fit(content, title=title))
+        if isinstance(content, str):
+            console.print(Panel.fit(content, title=title))
+        else:
+            console.print(Panel(content, title=title))
     else:
         console.print(content)
 
 
 def _render_install_results(entries: list[dict[str, object]], *, heading: str) -> str:
-    blocks = [render_install_result(entry, heading=heading) for entry in entries]
-    lines: list[str] = []
-    for index, block in enumerate(blocks):
-        if index:
-            lines.append("")
-        lines.extend(block.splitlines())
-    return render_text_list(lines)
+    renderables = [render_install_result_rich(entry, heading=heading) for entry in entries]
+    return Group(*renderables)
 
 
 def _human_settings(*, ensure_dirs: bool = True) -> Settings:
@@ -193,7 +199,7 @@ def main_callback(
 
 @app.command("version")
 def version_command(ctx: typer.Context) -> None:
-    _emit(ctx, version_payload(), renderer=render_version_payload, title="Version")
+    _emit(ctx, version_payload(), renderer=render_version_payload_rich, title="Version")
 
 
 @app.command("update")
@@ -203,18 +209,33 @@ def update_command(
 ) -> None:
     plan = build_update_plan()
     if check:
-        _emit(ctx, {"plan": plan.to_dict()}, renderer=render_update_plan, title="Update")
+        _emit(ctx, {"plan": plan.to_dict(), "current_version": current_version()}, renderer=render_update_plan_rich, title="Update")
         return
-    payload = run_update(plan)
+    if _state(ctx).json_output:
+        payload = run_update(plan)
+        if payload.get("updated"):
+            payload["post_update"] = refresh_installed_integrations(_human_settings(ensure_dirs=False), cwd=Path.cwd())
+        _emit(ctx, payload, renderer=render_update_result, title="Update")
+        return
+
+    before_version = current_version()
+    console.print(f"Current version: [bold]{before_version}[/bold]")
+    if not plan.auto_supported or not plan.command:
+        _emit(ctx, {"plan": plan.to_dict(), "current_version": before_version}, renderer=render_update_plan, title="Update")
+        return
+
+    with console.status(f"Updating zotero-headless via {plan.method}...", spinner="dots"):
+        payload = run_update(plan)
     if payload.get("updated"):
-        payload["post_update"] = refresh_installed_integrations(_human_settings(ensure_dirs=False), cwd=Path.cwd())
-    _emit(ctx, payload, renderer=render_update_result, title="Update")
+        with console.status("Refreshing installed integrations...", spinner="dots"):
+            payload["post_update"] = refresh_installed_integrations(_human_settings(ensure_dirs=False), cwd=Path.cwd())
+    _emit(ctx, payload, renderer=render_update_result_rich, title="Update")
 
 
 @app.command("doctor")
 def doctor_command(ctx: typer.Context) -> None:
     settings = _human_settings(ensure_dirs=False)
-    _emit(ctx, doctor_report(settings, cwd=Path.cwd()), renderer=render_doctor_report, title="Doctor")
+    _emit(ctx, doctor_report(settings, cwd=Path.cwd()), renderer=render_doctor_report_rich, title="Doctor")
 
 
 @app.command("capabilities")
@@ -254,7 +275,7 @@ def setup_start(ctx: typer.Context) -> None:
             discovered_libraries=result.discovered_libraries,
             selected_remote_libraries=result.selected_library_ids,
         ),
-        renderer=render_setup_result,
+        renderer=render_setup_result_rich,
         title="Setup",
     )
 
@@ -273,7 +294,7 @@ def setup_account(ctx: typer.Context) -> None:
             discovered_libraries=result.discovered_libraries,
             selected_remote_libraries=result.selected_library_ids,
         ),
-        renderer=render_setup_result,
+        renderer=render_setup_result_rich,
         title="Setup account",
     )
 
@@ -292,7 +313,7 @@ def setup_libraries(ctx: typer.Context) -> None:
             discovered_libraries=result.discovered_libraries,
             selected_remote_libraries=result.selected_library_ids,
         ),
-        renderer=render_setup_result,
+        renderer=render_setup_result_rich,
         title="Setup libraries",
     )
 
@@ -311,7 +332,7 @@ def setup_local(ctx: typer.Context) -> None:
             discovered_libraries=result.discovered_libraries,
             selected_remote_libraries=result.selected_library_ids,
         ),
-        renderer=render_setup_result,
+        renderer=render_setup_result_rich,
         title="Setup local",
     )
 
@@ -333,7 +354,7 @@ def setup_show_command(
     scope: str = typer.Option("project", "--scope", help="Setup scope."),
 ) -> None:
     payload = inspect_setup_target(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd(), scope=scope)
-    _emit(ctx, payload, renderer=render_setup_target, title="Setup target")
+    _emit(ctx, payload, renderer=render_setup_target_rich, title="Setup target")
 
 
 @setup_app.command("add")
@@ -343,7 +364,7 @@ def setup_add_command(
     scope: str = typer.Option("project", "--scope", help="Setup scope."),
 ) -> None:
     payload = install_mcp_setup(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd(), scope=scope)
-    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="Setup applied"), title="Setup")
+    _emit(ctx, payload, renderer=lambda entry: render_install_result_rich(entry, heading="Setup applied"), title="Setup")
 
 
 @setup_app.command("remove")
@@ -353,7 +374,7 @@ def setup_remove_command(
     scope: str = typer.Option("project", "--scope", help="Setup scope."),
 ) -> None:
     payload = remove_mcp_setup(tool, cwd=Path.cwd(), scope=scope)
-    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="Setup removed"), title="Setup")
+    _emit(ctx, payload, renderer=lambda entry: render_install_result_rich(entry, heading="Setup removed"), title="Setup")
 
 
 @skill_app.command("install")
@@ -371,7 +392,7 @@ def skill_install_command(
     if tool == "all":
         _emit(ctx, payload, renderer=lambda entries: _render_install_results(entries, heading="Skill installed"), title="Skill")
         return
-    _emit(ctx, payload[0], renderer=lambda entry: render_install_result(entry, heading="Skill installed"), title="Skill")
+    _emit(ctx, payload[0], renderer=lambda entry: render_install_result_rich(entry, heading="Skill installed"), title="Skill")
 
 
 @skill_app.command("export")
@@ -393,7 +414,7 @@ def _run_plugin_command(ctx: typer.Context, tool: str, *, heading: str) -> None:
     if tool == "all":
         _emit(ctx, payload, renderer=lambda entries: _render_install_results(entries, heading=heading), title="Plugin")
         return
-    _emit(ctx, payload[0], renderer=lambda entry: render_install_result(entry, heading=heading), title="Plugin")
+    _emit(ctx, payload[0], renderer=lambda entry: render_install_result_rich(entry, heading=heading), title="Plugin")
 
 
 @plugin_app.command("install")

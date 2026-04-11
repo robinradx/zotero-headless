@@ -62,11 +62,13 @@ Typical end-user use cases:
 
 This repository also contains contribution and architecture material because the project is still evolving, but the repo is not meant only for contributors.
 
-## Why The Repo Includes Vendored Zotero Code
+## Desktop Helper Workflow
 
-This repository intentionally includes a vendored Zotero source snapshot under `vendor/`.
+This repository no longer vendors a Zotero source snapshot.
 
-That is here for contributor visibility and debugging, not because the whole project is just a Zotero wrapper. The current architecture is a clean-room headless runtime with adapters around Zotero desktop and Zotero web sync, but understanding the upstream desktop/runtime behavior still matters for:
+The current architecture is a clean-room headless runtime with adapters around Zotero desktop and Zotero web sync. When contributors need to work on the optional desktop-helper path, the repo keeps only a small helper workflow under `desktop_helper/` rather than a full upstream source mirror.
+
+Understanding upstream desktop/runtime behavior still matters for:
 
 - local database interoperability
 - daemon/bootstrap experiments
@@ -74,7 +76,11 @@ That is here for contributor visibility and debugging, not because the whole pro
 - attachment handling
 - reproducible debugging for contributors
 
-For this project, keeping that context available is more useful than hiding it in a separate private mirror.
+The intended workflow is:
+
+- pin an upstream Zotero commit or tag in `desktop_helper/metadata.json`
+- maintain the helper delta as explicit patch files under `desktop_helper/patches/`
+- build or validate against an external upstream checkout instead of an in-repo vendored tree
 
 ## Repository Layout
 
@@ -84,8 +90,8 @@ For this project, keeping that context available is more useful than hiding it i
   - regression coverage for the runtime, sync, adapter, and tooling surfaces
 - `docs/`
   - architecture notes and implementation planning
-- `vendor/`
-  - vendored Zotero source snapshot used for reference and compatibility work
+- `desktop_helper/`
+  - metadata and patch workflow for the optional external Zotero desktop-helper path
 
 Local-only workspace material should go in ignored directories such as:
 

@@ -1,8 +1,0 @@
-image {
-    -moz-context-properties: fill, fill-opacity;
-    fill: var(--fill-secondary);
-    
-    @media (-moz-platform: macos) {
-        fill: currentColor;
-    }
-}

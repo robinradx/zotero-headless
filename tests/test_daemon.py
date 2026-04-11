@@ -9,15 +9,11 @@ from zotero_headless.daemon import (
     build_daemon_command,
     build_runtime_command,
     current_daemon_status,
-    vendored_daemon_patch_status,
 )
 from zotero_headless.observability import default_jobs_state, read_jobs_state
 
 
 class DaemonTests(unittest.TestCase):
-    def test_vendored_patch_detected(self):
-        self.assertTrue(vendored_daemon_patch_status())
-
     def test_build_command_includes_daemon_flag_and_datadir(self):
         settings = Settings(data_dir="/tmp/Zotero", zotero_bin="/Applications/Zotero.app/Contents/MacOS/zotero")
         command = build_daemon_command(settings)
@@ -43,12 +39,23 @@ class DaemonTests(unittest.TestCase):
             settings = Settings(state_dir=tmp, mirror_db=str(Path(tmp) / "mirror.sqlite"))
             status = current_daemon_status(settings)
             self.assertEqual(status.mode, "clean-room-runtime-ready")
-            self.assertTrue(status.vendor_patched)
             self.assertFalse(status.available)
             self.assertTrue(status.runtime_available)
             self.assertFalse(status.runtime_running)
             self.assertFalse(status.runtime_read_api_ready)
             self.assertFalse(status.read_api_ready)
+
+    def test_status_reports_desktop_helper_command_when_binary_is_configured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                state_dir=tmp,
+                mirror_db=str(Path(tmp) / "mirror.sqlite"),
+                zotero_bin="/Applications/Zotero.app/Contents/MacOS/zotero",
+            )
+            status = current_daemon_status(settings)
+            self.assertTrue(status.desktop_helper_command_available)
+            self.assertFalse(status.read_api_ready)
+            self.assertIsNotNone(status.desktop_helper_workflow_dir)
 
     def test_status_reports_running_runtime_from_state(self):
         with tempfile.TemporaryDirectory() as tmp:

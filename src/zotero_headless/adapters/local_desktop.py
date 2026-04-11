@@ -59,7 +59,7 @@ class LocalDesktopAdapter:
     Thin boundary for interoperability with a local Zotero desktop profile.
 
     The clean-room core should depend on this interface rather than directly on
-    Zotero's SQLite schema or vendored runtime details.
+    Zotero's SQLite schema or helper-specific upstream runtime details.
     """
 
     capabilities = LocalDesktopCapabilities()

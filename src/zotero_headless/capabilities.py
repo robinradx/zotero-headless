@@ -60,6 +60,7 @@ def get_capabilities(settings: Settings) -> dict:
         "runtime_daemon_read_api_ready": daemon.runtime_read_api_ready,
         "runtime_daemon_write_api_ready": daemon.runtime_write_api_ready,
         "runtime_daemon_observability": daemon.runtime_available,
+        "desktop_helper_command_available": daemon.desktop_helper_command_available,
         "desktop_helper_read_api_ready": daemon.read_api_ready,
         "desktop_helper_write_api_ready": daemon.write_api_ready,
         "paths": {
@@ -69,7 +70,7 @@ def get_capabilities(settings: Settings) -> dict:
             "export_dir": str(settings.resolved_export_dir()),
             "citation_export_path": str(settings.resolved_citation_export_path()),
             "file_cache_dir": str(settings.resolved_file_cache_dir()),
-            "vendor_zotero": daemon.vendor_dir,
+            "desktop_helper_workflow": daemon.desktop_helper_workflow_dir,
             "zotero_bin": daemon.executable,
             "daemon_runtime_state": daemon.runtime_state_path,
             "daemon_jobs_state": daemon.jobs_state_path,

@@ -44,9 +44,13 @@ Keep personal or tool-local material in ignored directories such as:
 
 Those are intentionally excluded from version control.
 
-## Vendored Zotero Source
+## Desktop Helper Workflow
 
-The vendored Zotero snapshot under `vendor/` is kept in-repo on purpose so contributors can reproduce and debug the upstream compatibility work. If you change anything that depends on that snapshot, document the reason clearly in the relevant code and docs.
+The repo does not vendor Zotero source anymore. If you work on the optional desktop-helper path:
+
+- update `desktop_helper/metadata.json` with the upstream Zotero commit or tag you validated against
+- keep the helper delta as explicit patch files under `desktop_helper/patches/`
+- document any behavior assumptions that depend on those patches in the relevant code and docs
 
 ## Tests And Scope
 

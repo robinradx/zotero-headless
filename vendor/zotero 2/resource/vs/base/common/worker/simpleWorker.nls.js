@@ -1,1 +1,0 @@
-../../../../../node_modules/monaco-editor/min/vs/base/common/worker/simpleWorker.nls.js

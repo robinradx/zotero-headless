@@ -1,6 +1,0 @@
-{
-  "devDependencies": {
-    "@types/jscodeshift": "^17.3.0",
-    "jscodeshift": "^17.3.0"
-  }
-}

@@ -21,11 +21,11 @@ class CapabilitiesTests(unittest.TestCase):
             self.assertIn("qmd_search", caps)
             self.assertIn("paths", caps)
 
-    def test_vendor_path_is_reported(self):
+    def test_desktop_helper_workflow_path_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(state_dir=tmp, mirror_db=str(Path(tmp) / "mirror.sqlite"))
             caps = get_capabilities(settings)
-            self.assertIn("vendor/zotero", caps["paths"]["vendor_zotero"])
+            self.assertTrue(caps["paths"]["desktop_helper_workflow"].endswith("desktop_helper"))
 
 
 if __name__ == "__main__":

@@ -39,10 +39,10 @@ class DaemonStatus:
     runtime_read_api_ready: bool = False
     runtime_write_api_ready: bool = False
     runtime_launch_command: list[str] | None = None
+    desktop_helper_command_available: bool = False
     read_api_ready: bool = False
     write_api_ready: bool = False
-    vendor_dir: str | None = None
-    vendor_patched: bool = False
+    desktop_helper_workflow_dir: str | None = None
     executable: str | None = None
     launch_command: list[str] | None = None
     local_api_url: str | None = None
@@ -54,30 +54,8 @@ class DaemonStatus:
         return asdict(self)
 
 
-def vendor_zotero_dir() -> Path:
-    root = Path(__file__).resolve().parents[2] / "vendor"
-    for candidate in ("zotero", "zotero 2"):
-        path = root / candidate
-        if path.exists():
-            return path
-    return root / "zotero"
-
-
-def _file_contains(path: Path, needle: str) -> bool:
-    if not path.exists():
-        return False
-    return needle in path.read_text(encoding="utf-8")
-
-
-def vendored_daemon_patch_status(vendor_dir: Path | None = None) -> bool:
-    root = vendor_dir or vendor_zotero_dir()
-    files = {
-        root / "app" / "assets" / "commandLineHandler.js": "ZoteroDaemon",
-        root / "chrome" / "content" / "zotero" / "modules" / "commandLineOptions.mjs": "daemonMode",
-        root / "chrome" / "content" / "zotero" / "xpcom" / "commandLineHandler.js": "daemonMode",
-        root / "chrome" / "content" / "zotero" / "xpcom" / "zotero.js": "httpServer.localAPI.enabled",
-    }
-    return all(_file_contains(path, needle) for path, needle in files.items())
+def desktop_helper_workflow_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "desktop_helper"
 
 
 def build_daemon_command(settings: Settings) -> list[str] | None:
@@ -270,8 +248,7 @@ def serve_daemon_runtime(
 
 def current_daemon_status(settings: Settings | None = None) -> DaemonStatus:
     settings = settings or Settings()
-    vendor_dir = vendor_zotero_dir()
-    vendor_patched = vendored_daemon_patch_status(vendor_dir)
+    workflow_dir = desktop_helper_workflow_dir()
     launch_command = build_daemon_command(settings)
     runtime_command = build_runtime_command(settings)
     executable = settings.zotero_bin
@@ -292,10 +269,11 @@ def current_daemon_status(settings: Settings | None = None) -> DaemonStatus:
         if not runtime_running
         else "The clean-room daemon runtime is running."
     )
-    if vendor_patched and executable:
-        message += " The vendored Zotero desktop helper is also patched and launchable for read-only local API access."
-    elif vendor_patched:
-        message += " The vendored Zotero desktop helper is patched, but no Zotero runtime binary is configured yet."
+    if executable:
+        message += (
+            " A desktop helper command is available for an externally patched Zotero binary, "
+            "but this repo does not infer helper patch state from an in-repo source snapshot."
+        )
     return DaemonStatus(
         available=runtime_running,
         mode="clean-room-runtime-ready",
@@ -307,10 +285,10 @@ def current_daemon_status(settings: Settings | None = None) -> DaemonStatus:
         runtime_read_api_ready=runtime_running,
         runtime_write_api_ready=runtime_running,
         runtime_launch_command=runtime_command,
-        read_api_ready=bool(vendor_patched and executable),
+        desktop_helper_command_available=bool(launch_command),
+        read_api_ready=False,
         write_api_ready=False,
-        vendor_dir=str(vendor_dir) if vendor_dir.exists() else None,
-        vendor_patched=vendor_patched,
+        desktop_helper_workflow_dir=str(workflow_dir) if workflow_dir.exists() else None,
         executable=executable,
         launch_command=launch_command,
         local_api_url=local_api_url,

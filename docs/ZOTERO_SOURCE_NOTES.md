@@ -1,70 +1,60 @@
 # Zotero Source Notes
 
-These notes are based on the local Zotero source snapshot in:
+The repo no longer vendors a Zotero source snapshot. These notes describe the upstream Zotero areas that matter for the optional desktop-helper path and for local desktop interoperability work.
 
-- [vendor/zotero 2](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202)
+Use them together with:
 
-## Relevant Bootstrap Files
+- `desktop_helper/metadata.json` for the pinned upstream revision you are validating against
+- `desktop_helper/patches/` for the explicit helper delta maintained by this repo
 
-- [zotero.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/zotero.js)
+## Relevant Upstream Areas
+
+- `chrome/content/zotero/xpcom/zotero.js`
   - `Zotero.init(options)` is the top-level startup entrypoint.
   - `_initFull()` initializes the database and then starts the major services.
-  - Around line 698, `Zotero.Server.init()` is started when `httpServer.enabled` is true.
-  - Around line 714, `Zotero.Sync.Runner = new Zotero.Sync.Runner_Module;` is created.
-  - daemon mode can force-enable the local API before those services come up.
+  - the local API and sync services are both initialized from here.
 
-- [commandLineHandler.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/app/assets/commandLineHandler.js)
+- `app/assets/commandLineHandler.js`
   - exposes existing CLI flags such as `--datadir`
-  - now the seam for a dedicated `ZoteroDaemon` bootstrap flag
+  - natural seam for a dedicated `ZoteroDaemon` bootstrap flag when maintaining the optional helper path
 
-## Relevant Data-Layer Files
-
-- [item.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/data/item.js)
+- `chrome/content/zotero/xpcom/data/item.js`
   - defines `Zotero.Item`
-  - exposes properties like `libraryID`, `key`, `version`, and `synced`
-  - uses `saveTx()` for persistence through Zotero's own data layer
+  - shows persistence through Zotero's own data layer
 
-- [items.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/data/items.js)
-  - shows local mutation semantics
-  - for example, trashing items marks `item.synced = false` and updates `clientDateModified`
+- `chrome/content/zotero/xpcom/data/items.js`
+  - shows local mutation semantics such as sync bookkeeping and trash behavior
 
-- [db.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/db.js)
+- `chrome/content/zotero/xpcom/db.js`
   - transaction layer used by Zotero internals
 
-- [schema.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/schema.js)
-  - confirms schema details such as `items.version` and `items.synced`
+- `chrome/content/zotero/xpcom/schema.js`
+  - schema details for versions, sync fields, and other local invariants
 
-## Relevant Sync Files
+- `chrome/content/zotero/xpcom/sync/syncRunner.js`
+  - orchestrates sync sessions and library-level coordination
 
-- [syncRunner.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/sync/syncRunner.js)
-  - orchestrates sync sessions
-  - checks API key access
-  - coordinates library sync and conflict handling
+- `chrome/content/zotero/xpcom/sync/syncEventListeners.js`
+  - shows how local changes become queued sync work
 
-- [syncEventListeners.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/sync/syncEventListeners.js)
-  - shows how local object changes are translated into queued sync work
-
-- [syncLocal.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/sync/syncLocal.js)
+- `chrome/content/zotero/xpcom/sync/syncLocal.js`
   - local sync bookkeeping and delete/sync queues
 
-## Relevant Server Files
-
-- [server_localAPI.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/server/server_localAPI.js)
-  - exposes a fairly complete local implementation of the Zotero Web API under `/api/`
+- `chrome/content/zotero/xpcom/server/server_localAPI.js`
+  - exposes a local implementation of the Zotero Web API under `/api/`
   - read-only only, with writes explicitly unsupported
-  - appears to be data-layer based rather than pane-based
-  - disabled by default via `extensions.zotero.httpServer.localAPI.enabled`
 
-- [server_connector.js](/Users/robinradx/Documents/GitHub/zotero-headless/vendor/zotero%202/chrome/content/zotero/xpcom/server/server_connector.js)
-  - confirms the app-local connector API depends on the normal Zotero runtime
-  - tied to active pane/selection behavior and therefore not sufficient as a standalone headless API
+- `chrome/content/zotero/xpcom/server/server_connector.js`
+  - tied to the normal Zotero runtime and active UI assumptions
+  - not sufficient as a standalone headless API
 
 ## Working Conclusion
 
-The most plausible implementation path is:
+The clean-room runtime remains the main product path.
 
-1. Add a dedicated `ZoteroDaemon` startup path to Zotero's own application bootstrap.
-2. Reuse Zotero initialization and sync services, but skip the normal pane/window UI.
-3. Auto-enable the built-in read-only local API for daemon mode as the first headless surface.
-4. Add daemon-specific write endpoints later, because the built-in local API does not support writes.
-5. Keep `zotero-headless` as the external CLI/API/MCP wrapper around that daemon.
+The optional desktop-helper path, if maintained, should stay narrow:
+
+1. patch Zotero's bootstrap only where needed for a `ZoteroDaemon`-style startup path
+2. reuse upstream initialization for read-only local API access
+3. keep write behavior out of the helper unless there is a clearly bounded and validated need
+4. keep `zotero-headless` itself as the external CLI, HTTP API, and MCP wrapper

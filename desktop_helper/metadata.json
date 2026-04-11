@@ -1,0 +1,7 @@
+{
+  "upstream_repo": "https://github.com/zotero/zotero",
+  "upstream_ref": null,
+  "helper_entrypoint_flag": "-ZoteroDaemon",
+  "patches": [],
+  "notes": "Set upstream_ref to the exact Zotero commit or tag you validate against before maintaining helper patches."
+}

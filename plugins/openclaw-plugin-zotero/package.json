@@ -11,6 +11,7 @@
   },
   "openclaw": {
     "extensions": ["./dist/index.js"],
+    "hooks": ["./dist/hooks/gateway-sync.js"],
     "compat": ">=2026.3.0"
   },
   "dependencies": {

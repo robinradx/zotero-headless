@@ -23,6 +23,7 @@ from .agent_setup import (
     inspect_setup_target,
     install_mcp_setup,
     install_skill_set,
+    normalize_target_name,
     refresh_installed_integrations,
     remove_mcp_setup,
     setup_list,
@@ -363,6 +364,7 @@ def skill_install_command(
     tool: str = typer.Argument(..., help="Skill target client."),
     variant: str = typer.Option("general", "--variant", help="Skill variant."),
 ) -> None:
+    tool = normalize_target_name(tool)
     if tool != "all" and tool not in SUPPORTED_SKILL_TARGETS:
         raise typer.BadParameter(f"Unsupported skill target: {tool}")
     payload = install_skill_set(tool, variant=variant)
@@ -378,11 +380,13 @@ def skill_export_command(
     tool: str = typer.Argument(..., help="Skill target client."),
     variant: str = typer.Option("general", "--variant", help="Skill variant."),
 ) -> None:
+    tool = normalize_target_name(tool)
     payload = export_skill(tool, variant=variant)
     _emit(ctx, payload, title="Skill export")
 
 
 def _run_plugin_command(ctx: typer.Context, tool: str, *, heading: str) -> None:
+    tool = normalize_target_name(tool)
     if tool != "all" and tool not in SUPPORTED_PLUGIN_TARGETS:
         raise typer.BadParameter(f"Unsupported plugin target: {tool}")
     payload = install_plugin_set(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd())

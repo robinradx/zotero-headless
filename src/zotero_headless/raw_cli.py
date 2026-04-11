@@ -10,12 +10,14 @@ from .agent_setup import (
     SUPPORTED_SETUP_TARGETS,
     SUPPORTED_SKILL_TARGETS,
     SUPPORTED_SKILL_VARIANTS,
+    TARGET_ALIASES,
     export_skill,
     doctor_report,
     install_plugin_set,
     install_mcp_setup,
     install_skill_set,
     inspect_setup_target,
+    normalize_target_name,
     refresh_installed_integrations,
     remove_mcp_setup,
     setup_list,
@@ -89,6 +91,10 @@ def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None
         "selected_remote_libraries": selected_remote_libraries or [],
         "warnings": warnings,
     }
+
+
+def _target_choices(*targets: str) -> list[str]:
+    return list(targets) + [alias for alias, canonical in TARGET_ALIASES.items() if canonical in targets]
 
 
 def _add_machine_commands(sub) -> None:
@@ -297,36 +303,36 @@ def build_parser() -> argparse.ArgumentParser:
     setup_sub.add_parser("wizard")
     setup_sub.add_parser("list")
     setup_show = setup_sub.add_parser("show")
-    setup_show.add_argument("tool", choices=list(SUPPORTED_SETUP_TARGETS))
+    setup_show.add_argument("tool", choices=_target_choices(*SUPPORTED_SETUP_TARGETS))
     setup_show.add_argument("--scope", choices=["project", "user"], default="project")
     setup_add = setup_sub.add_parser("add")
-    setup_add.add_argument("tool", choices=list(SUPPORTED_SETUP_TARGETS))
+    setup_add.add_argument("tool", choices=_target_choices(*SUPPORTED_SETUP_TARGETS))
     setup_add.add_argument("--scope", choices=["project", "user"], default="project")
     setup_remove = setup_sub.add_parser("remove")
-    setup_remove.add_argument("tool", choices=[tool for tool in SUPPORTED_SETUP_TARGETS if tool != "json"])
+    setup_remove.add_argument("tool", choices=_target_choices(*[tool for tool in SUPPORTED_SETUP_TARGETS if tool != "json"]))
     setup_remove.add_argument("--scope", choices=["project", "user"], default="project")
 
     skill = sub.add_parser("skill")
     skill_sub = skill.add_subparsers(dest="skill_command", required=True)
     skill_add = skill_sub.add_parser("add")
-    skill_add.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS) + ["all"])
+    skill_add.add_argument("tool", choices=_target_choices(*SUPPORTED_SKILL_TARGETS) + ["all"])
     skill_add.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_install = skill_sub.add_parser("install")
-    skill_install.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS) + ["all"])
+    skill_install.add_argument("tool", choices=_target_choices(*SUPPORTED_SKILL_TARGETS) + ["all"])
     skill_install.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_update = skill_sub.add_parser("update")
-    skill_update.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS) + ["all"])
+    skill_update.add_argument("tool", choices=_target_choices(*SUPPORTED_SKILL_TARGETS) + ["all"])
     skill_update.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_export = skill_sub.add_parser("export")
-    skill_export.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_export.add_argument("tool", choices=_target_choices(*SUPPORTED_SKILL_TARGETS))
     skill_export.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
 
     plugin = sub.add_parser("plugin")
     plugin_sub = plugin.add_subparsers(dest="plugin_command", required=True)
     plugin_install = plugin_sub.add_parser("install")
-    plugin_install.add_argument("tool", choices=list(SUPPORTED_PLUGIN_TARGETS) + ["all"])
+    plugin_install.add_argument("tool", choices=_target_choices(*SUPPORTED_PLUGIN_TARGETS) + ["all"])
     plugin_update = plugin_sub.add_parser("update")
-    plugin_update.add_argument("tool", choices=list(SUPPORTED_PLUGIN_TARGETS) + ["all"])
+    plugin_update.add_argument("tool", choices=_target_choices(*SUPPORTED_PLUGIN_TARGETS) + ["all"])
 
     sub.add_parser("doctor")
 
@@ -436,6 +442,8 @@ def main(argv: list[str] | None = None) -> int:
     if command == "setup":
         settings = load_settings(ensure_dirs=False)
         cwd = Path.cwd()
+        if hasattr(args, "tool"):
+            args.tool = normalize_target_name(args.tool)
         if args.setup_command in {"start", "wizard", "account", "libraries", "local"}:
             mode = {
                 "start": "full",
@@ -484,6 +492,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if command == "skill":
+        args.tool = normalize_target_name(args.tool)
         if args.skill_command in {"add", "install", "update"}:
             payload = install_skill_set(args.tool, variant=args.variant)
             _emit(
@@ -501,6 +510,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if command == "plugin":
+        args.tool = normalize_target_name(args.tool)
         if args.plugin_command in {"install", "update"}:
             settings = load_settings(ensure_dirs=False)
             payload = install_plugin_set(args.tool, settings, cwd=cwd)

@@ -164,6 +164,25 @@ class AgentSetupTests(unittest.TestCase):
             self.assertEqual(run_mock.call_args_list[0].args[0], ["/usr/local/bin/openclaw", "plugins", "install", "-l", str(plugin_dir.resolve())])
             self.assertEqual(run_mock.call_args_list[1].args[0], ["/usr/local/bin/openclaw", "plugins", "enable", "zotero"])
 
+    @patch("zotero_headless.agent_setup.subprocess.run")
+    @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
+    def test_install_plugin_accepts_open_claw_alias(self, _which, run_mock):
+        run_mock.side_effect = [
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+            plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+
+            result = install_plugin("open-claw", Settings(), cwd=cwd, home=home)
+
+            self.assertTrue(result["installed"])
+            self.assertEqual(result["target"], "openclaw")
+
     def test_install_skill_set_for_all_skips_claude_desktop_archive_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -211,6 +230,17 @@ class AgentSetupTests(unittest.TestCase):
         payload = json.loads(package_json.read_text(encoding="utf-8"))
 
         self.assertEqual(payload["scripts"]["prepare"], "tsc")
+        self.assertEqual(payload["openclaw"]["hooks"], ["./dist/hooks/gateway-sync.js"])
+
+    def test_openclaw_plugin_source_does_not_ship_child_process_calls(self):
+        root = Path(__file__).resolve().parents[1]
+        plugin_roots = [
+            root / "plugins" / "openclaw-plugin-zotero",
+            root / "src" / "zotero_headless" / "packaged_plugins" / "openclaw-plugin-zotero",
+        ]
+        for plugin_root in plugin_roots:
+            for path in plugin_root.rglob("*.ts"):
+                self.assertNotIn("child_process", path.read_text(encoding="utf-8"), str(path))
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")

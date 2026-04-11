@@ -250,6 +250,10 @@ def render_install_result(entry: dict[str, Any], *, heading: str) -> str:
     if instructions:
         lines.append("Next steps:")
         lines.extend(f"- {line}" for line in instructions)
+    notes = entry.get("notes") or []
+    if notes:
+        lines.append("Notes:")
+        lines.extend(f"- {line}" for line in notes)
     return "\n".join(lines)
 
 

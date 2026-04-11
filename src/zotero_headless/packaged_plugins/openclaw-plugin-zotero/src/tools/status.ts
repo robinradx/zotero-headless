@@ -13,7 +13,6 @@ export function createStatusTool(client: UnifiedClient, config: ZoteroPluginConf
     async execute() {
       const mode = await client.getMode();
       const daemonReachable = mode === "http";
-      const cliBinaryFound = mode !== "unavailable";
 
       let libraries: Array<{ libraryId: string; name: string; [k: string]: unknown }> = [];
       try {
@@ -30,7 +29,6 @@ export function createStatusTool(client: UnifiedClient, config: ZoteroPluginConf
       const lines: string[] = [
         `Transport: ${mode}`,
         `Daemon reachable: ${daemonReachable}`,
-        `CLI binary found: ${cliBinaryFound}`,
         "",
         `Libraries (${libraries.length}):`,
       ];

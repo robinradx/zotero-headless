@@ -46,6 +46,13 @@ SUPPORTED_SKILL_VARIANTS = ("general", "daemon")
 USER_SCOPE_ONLY_TARGETS = {"codex", "claude-desktop", "gemini", "cline", "antigravity", "openclaw", "windsurf"}
 PROJECT_OR_USER_TARGETS = {"cursor"}
 PROJECT_ONLY_TARGETS = {"claude-code"}
+TARGET_ALIASES = {
+    "open-claw": "openclaw",
+}
+
+
+def normalize_target_name(target: str) -> str:
+    return TARGET_ALIASES.get(target, target)
 
 
 def _packaged_plugin_root() -> Path:
@@ -268,8 +275,10 @@ def _install_openclaw_plugin(
         },
         "stdout": "\n".join(part for part in (install.stdout.strip(), enable.stdout.strip()) if part),
         "stderr": "\n".join(part for part in (install.stderr.strip(), enable.stderr.strip()) if part),
-        "instructions": [
-            f"Inspect the plugin with `openclaw plugins inspect {OPENCLAW_PLUGIN_ID}`.",
+        "notes": [
+            f"Already ran `openclaw plugins install -l {plugin_path}`.",
+            f"Already ran `openclaw plugins enable {OPENCLAW_PLUGIN_ID}`.",
+            f"Inspect the plugin with `openclaw plugins inspect {OPENCLAW_PLUGIN_ID}` if you want to verify the active config.",
             "Install the matching skill with `zhl skill install openclaw` for better agent routing.",
         ],
     }
@@ -396,6 +405,7 @@ def setup_target_path(
     home: Path | None = None,
     scope: str = "project",
 ) -> Path | None:
+    target = normalize_target_name(target)
     cwd = (cwd or Path.cwd()).resolve()
     home = (home or Path.home()).expanduser()
     if target in USER_SCOPE_ONLY_TARGETS and scope != "user":
@@ -435,6 +445,7 @@ def install_mcp_setup(
     home: Path | None = None,
     scope: str = "project",
 ) -> dict[str, Any]:
+    target = normalize_target_name(target)
     if target not in SUPPORTED_SETUP_TARGETS:
         raise ValueError(f"Unsupported setup target: {target}")
     if target == "openclaw":
@@ -475,6 +486,7 @@ def remove_mcp_setup(
     home: Path | None = None,
     scope: str = "project",
 ) -> dict[str, Any]:
+    target = normalize_target_name(target)
     if target not in SUPPORTED_SETUP_TARGETS or target == "json":
         raise ValueError(f"Unsupported removable setup target: {target}")
     if target == "openclaw":
@@ -519,6 +531,7 @@ def inspect_setup_target(
     home: Path | None = None,
     scope: str = "project",
 ) -> dict[str, Any]:
+    target = normalize_target_name(target)
     path = setup_target_path(target, cwd=cwd, home=home, scope=scope)
     if target == "openclaw":
         binary = _openclaw_binary()
@@ -582,6 +595,7 @@ def install_plugin(
     cwd: Path | None = None,
     home: Path | None = None,
 ) -> dict[str, Any]:
+    target = normalize_target_name(target)
     if target not in SUPPORTED_PLUGIN_TARGETS:
         raise ValueError(f"Unsupported plugin target: {target}")
     if target == "openclaw":
@@ -626,6 +640,7 @@ def install_plugin_set(
     cwd: Path | None = None,
     home: Path | None = None,
 ) -> list[dict[str, Any]]:
+    target = normalize_target_name(target)
     if target == "all":
         targets = BULK_PLUGIN_TARGETS
     elif target in SUPPORTED_PLUGIN_TARGETS:
@@ -636,6 +651,7 @@ def install_plugin_set(
 
 
 def _plugin_source_exists(target: str, *, cwd: Path | None = None) -> bool:
+    target = normalize_target_name(target)
     if target == "codex":
         return _codex_plugin_source_path(cwd=cwd).exists()
     if target == "claude-code":
@@ -726,6 +742,7 @@ def _variant_specific_notes(variant: str) -> list[str]:
 
 
 def skill_text(target: str, *, variant: str = "general") -> str:
+    target = normalize_target_name(target)
     if target not in SUPPORTED_SKILL_TARGETS:
         raise ValueError(f"Unsupported skill target: {target}")
     if variant not in SUPPORTED_SKILL_VARIANTS:
@@ -840,6 +857,7 @@ Useful daemon endpoints:
 
 
 def skill_target_path(target: str, *, home: Path | None = None, variant: str = "general") -> Path:
+    target = normalize_target_name(target)
     if target not in SUPPORTED_SKILL_TARGETS:
         raise ValueError(f"Unsupported skill target: {target}")
     if variant not in SUPPORTED_SKILL_VARIANTS:
@@ -897,6 +915,7 @@ def install_skill(
     home: Path | None = None,
     variant: str = "general",
 ) -> dict[str, Any]:
+    target = normalize_target_name(target)
     if target not in SUPPORTED_SKILL_TARGETS:
         raise ValueError(f"Unsupported skill target: {target}")
     if variant not in SUPPORTED_SKILL_VARIANTS:
@@ -922,6 +941,7 @@ def install_skill_set(
     home: Path | None = None,
     variant: str = "general",
 ) -> list[dict[str, Any]]:
+    target = normalize_target_name(target)
     if target == "all":
         targets = BULK_SKILL_TARGETS
     elif target in SUPPORTED_SKILL_TARGETS:
@@ -972,6 +992,7 @@ def refresh_installed_integrations(
 
 
 def export_skill(target: str, *, variant: str = "general") -> dict[str, Any]:
+    target = normalize_target_name(target)
     if variant not in SUPPORTED_SKILL_VARIANTS:
         raise ValueError(f"Unsupported skill variant: {variant}")
     if target == "claude-desktop":

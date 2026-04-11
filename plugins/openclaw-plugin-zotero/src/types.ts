@@ -16,11 +16,7 @@ export interface ZoteroPluginConfig {
   daemon?: {
     host?: string;
     port?: number;
-    autoStart?: boolean;
     syncOnStartup?: boolean;
-  };
-  cli?: {
-    binary?: string;
   };
   libraries?: Record<string, Partial<LibraryPermissions>>;
   defaultPermissions?: Partial<LibraryPermissions>;
@@ -30,13 +26,7 @@ export interface ZoteroPluginConfig {
 export interface DaemonConfig {
   host: string;
   port: number;
-  autoStart: boolean;
   syncOnStartup: boolean;
-}
-
-/** Resolved CLI config with defaults applied */
-export interface CliConfig {
-  binary: string;
 }
 
 /** Zotero item summary returned by search */
@@ -94,13 +84,12 @@ export interface SyncConflict {
 }
 
 /** Transport mode indicator */
-export type TransportMode = "http" | "cli" | "unavailable";
+export type TransportMode = "http" | "unavailable";
 
 /** Status response */
 export interface ZoteroStatus {
   mode: TransportMode;
   daemonReachable: boolean;
-  cliBinaryFound: boolean;
   libraries: ZoteroLibrary[];
   permissions: Record<string, LibraryPermissions>;
 }

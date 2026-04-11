@@ -8,14 +8,7 @@
       "properties": {
         "host": { "type": "string", "default": "localhost" },
         "port": { "type": "number", "default": 8787 },
-        "autoStart": { "type": "boolean", "default": true },
         "syncOnStartup": { "type": "boolean", "default": true }
-      }
-    },
-    "cli": {
-      "type": "object",
-      "properties": {
-        "binary": { "type": "string", "default": "zhl" }
       }
     },
     "libraries": {

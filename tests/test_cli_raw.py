@@ -61,6 +61,13 @@ class CliRawParserTests(unittest.TestCase):
         self.assertTrue(args.push_remote)
         self.assertTrue(args.confirm)
 
+    def test_plugin_install_accepts_open_claw_alias(self):
+        args = build_parser().parse_args(["plugin", "install", "open-claw"])
+
+        self.assertEqual(args.command, "plugin")
+        self.assertEqual(args.plugin_command, "install")
+        self.assertEqual(args.tool, "open-claw")
+
 
 if __name__ == "__main__":
     unittest.main()

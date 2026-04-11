@@ -9,6 +9,7 @@ import zipfile
 
 from ..core import CanonicalStore, ChangeRecord, EntityType
 from ..qmd import QmdAutoIndexer
+from ..recovery import RecoveryService
 from ..utils import annotation_display_title, detect_citation_aliases, detect_citation_key, format_library_id, now_iso
 from ..web_api import ZoteroApiError, ZoteroWebClient
 
@@ -39,7 +40,13 @@ class WebSyncAdapter:
 
     capabilities = WebSyncCapabilities()
 
-    def pull_library(self, library_id: str, cursor: WebLibraryCursor | None = None) -> dict[str, object]:
+    def pull_library(
+        self,
+        library_id: str,
+        cursor: WebLibraryCursor | None = None,
+        *,
+        record_recovery_snapshot: bool = True,
+    ) -> dict[str, object]:
         raise NotImplementedError
 
     def push_changes(self, library_id: str, changes: list[ChangeRecord]) -> dict[str, object]:
@@ -140,6 +147,12 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
             "fulltext_version": fulltext_result["fulltext_version"],
         }
         self._refresh_qmd(library_id)
+        if record_recovery_snapshot and self.client.settings.recovery_auto_snapshots:
+            result["recovery_snapshot"] = RecoveryService(
+                self.client.settings,
+                canonical=self.store,
+                qmd_indexer=self.qmd_indexer,
+            ).create_snapshot(reason=f"post-pull:{library_id}")
         return result
 
     def list_conflicts(self, library_id: str, *, entity_type: EntityType | None = None) -> list[dict[str, object]]:
@@ -231,6 +244,13 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
         }
 
     def push_changes(self, library_id: str, changes: list[ChangeRecord] | None = None) -> dict[str, object]:
+        recovery_snapshot = None
+        if self.client.settings.recovery_auto_snapshots:
+            recovery_snapshot = RecoveryService(
+                self.client.settings,
+                canonical=self.store,
+                qmd_indexer=self.qmd_indexer,
+            ).create_snapshot(reason=f"pre-push:{library_id}")
         collection_result = self._push_kind(library_id, EntityType.COLLECTION)
         item_result = self._push_kind(library_id, EntityType.ITEM)
         conflicts = collection_result["conflicts"] + item_result["conflicts"]
@@ -241,8 +261,8 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
                 "reason": "push had conflicts or failures; final pull skipped to avoid overwriting unsynced local state",
             }
         else:
-            pull_result = self.pull_library(library_id)
-        return {
+            pull_result = self.pull_library(library_id, record_recovery_snapshot=False)
+        result = {
             "library_id": library_id,
             "pushed": collection_result["pushed"] + item_result["pushed"],
             "deleted": collection_result["deleted"] + item_result["deleted"],
@@ -250,6 +270,15 @@ class CanonicalWebSyncAdapter(WebSyncAdapter):
             "failures": failures,
             "pull_result": pull_result,
         }
+        if recovery_snapshot:
+            result["recovery_snapshot"] = recovery_snapshot
+        if self.client.settings.recovery_auto_snapshots and not conflicts and not failures:
+            result["post_recovery_snapshot"] = RecoveryService(
+                self.client.settings,
+                canonical=self.store,
+                qmd_indexer=self.qmd_indexer,
+            ).create_snapshot(reason=f"post-push:{library_id}")
+        return result
 
     def _push_kind(self, library_id: str, entity_type: EntityType) -> dict[str, object]:
         pending = self.store.list_unsynced_entities(library_id, entity_type, limit=1000)

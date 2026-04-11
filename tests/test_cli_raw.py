@@ -36,6 +36,31 @@ class CliRawParserTests(unittest.TestCase):
         self.assertEqual(args.raw_command, "citations")
         self.assertEqual(args.citations_command, "showpath")
 
+    def test_raw_recovery_restore_execute_parses_arguments(self):
+        args = build_parser().parse_args(
+            [
+                "raw",
+                "recovery",
+                "restore",
+                "execute",
+                "--snapshot",
+                "snap-1",
+                "--library",
+                "group:123",
+                "--push-remote",
+                "--confirm",
+            ]
+        )
+
+        self.assertEqual(args.command, "raw")
+        self.assertEqual(args.raw_command, "recovery")
+        self.assertEqual(args.recovery_command, "restore")
+        self.assertEqual(args.recovery_restore_command, "execute")
+        self.assertEqual(args.snapshot_id, "snap-1")
+        self.assertEqual(args.library, "group:123")
+        self.assertTrue(args.push_remote)
+        self.assertTrue(args.confirm)
+
 
 if __name__ == "__main__":
     unittest.main()

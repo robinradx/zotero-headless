@@ -70,6 +70,8 @@ def get_capabilities(settings: Settings) -> dict:
             "export_dir": str(settings.resolved_export_dir()),
             "citation_export_path": str(settings.resolved_citation_export_path()),
             "file_cache_dir": str(settings.resolved_file_cache_dir()),
+            "recovery_snapshot_dir": str(settings.resolved_recovery_snapshot_dir()),
+            "recovery_temp_dir": str(settings.resolved_recovery_temp_dir()),
             "desktop_helper_workflow": daemon.desktop_helper_workflow_dir,
             "zotero_bin": daemon.executable,
             "daemon_runtime_state": daemon.runtime_state_path,

@@ -14,6 +14,7 @@ from .daemon import current_daemon_status
 from .library_routing import merged_libraries, prefers_canonical_reads
 from .local_db import LocalZoteroDB
 from .qmd import QmdAutoIndexer, QmdClient
+from .recovery import RecoveryService
 from .service import HeadlessService, LocalWriteRequiresDaemonError
 from .store import MirrorStore
 from .sync import SyncService
@@ -47,6 +48,80 @@ TOOLS = [
                 "library_id": {"type": "string"},
                 "limit": {"type": "integer", "default": 20},
             },
+        },
+    },
+    {
+        "name": "zotero_recovery_repositories",
+        "description": "List configured recovery repositories, including local snapshots and external backup targets.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "zotero_recovery_snapshot_create",
+        "description": "Create an immutable recovery snapshot of the canonical store, files, qmd export, and citation export.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"reason": {"type": "string"}},
+        },
+    },
+    {
+        "name": "zotero_recovery_snapshot_list",
+        "description": "List local recovery snapshots.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"limit": {"type": "integer", "default": 20}},
+        },
+    },
+    {
+        "name": "zotero_recovery_snapshot_verify",
+        "description": "Verify the integrity of a local recovery snapshot.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"snapshot_id": {"type": "string"}},
+            "required": ["snapshot_id"],
+        },
+    },
+    {
+        "name": "zotero_recovery_restore_plan",
+        "description": "Compute a restore plan for a snapshot, optionally scoped to one library.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "snapshot_id": {"type": "string"},
+                "library_id": {"type": "string"},
+            },
+            "required": ["snapshot_id"],
+        },
+    },
+    {
+        "name": "zotero_recovery_restore_list",
+        "description": "List recorded restore runs and their current status.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"limit": {"type": "integer", "default": 20}},
+        },
+    },
+    {
+        "name": "zotero_recovery_restore_show",
+        "description": "Get one recorded restore run by ID.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"run_id": {"type": "string"}},
+            "required": ["run_id"],
+        },
+    },
+    {
+        "name": "zotero_recovery_restore_execute",
+        "description": "Execute a recovery restore. Requires confirm=true and supports full-state or library-scoped restore.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "snapshot_id": {"type": "string"},
+                "library_id": {"type": "string"},
+                "confirm": {"type": "boolean"},
+                "push_remote": {"type": "boolean"},
+                "apply_local": {"type": "boolean"},
+            },
+            "required": ["snapshot_id", "confirm"],
         },
     },
     {
@@ -344,7 +419,8 @@ def run_stdio_server(settings: Settings) -> None:
     sync_service = SyncService(settings, store, qmd_indexer=qmd_indexer)
     service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
     qmd = QmdClient(settings)
-    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
+    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer, settings=settings)
+    recovery = RecoveryService(settings, canonical=canonical, qmd_indexer=qmd_indexer)
 
     def canonical_sync() -> CanonicalWebSyncAdapter:
         return CanonicalWebSyncAdapter(canonical, ZoteroWebClient(settings), qmd_indexer=qmd_indexer)
@@ -389,6 +465,31 @@ def run_stdio_server(settings: Settings) -> None:
                     payload = canonical.list_changes(
                         library_id=arguments.get("library_id"),
                         limit=int(arguments.get("limit", 20)),
+                    )
+                elif name == "zotero_recovery_repositories":
+                    payload = recovery.repositories()
+                elif name == "zotero_recovery_snapshot_create":
+                    payload = recovery.create_snapshot(reason=str(arguments.get("reason") or "manual"))
+                elif name == "zotero_recovery_snapshot_list":
+                    payload = recovery.list_snapshots(limit=int(arguments.get("limit", 20)))
+                elif name == "zotero_recovery_snapshot_verify":
+                    payload = recovery.verify_snapshot(arguments["snapshot_id"])
+                elif name == "zotero_recovery_restore_plan":
+                    payload = recovery.plan_restore(
+                        snapshot_id=arguments["snapshot_id"],
+                        library_id=arguments.get("library_id"),
+                    )
+                elif name == "zotero_recovery_restore_list":
+                    payload = recovery.list_restore_runs(limit=int(arguments.get("limit", 20)))
+                elif name == "zotero_recovery_restore_show":
+                    payload = recovery.get_restore_run(arguments["run_id"])
+                elif name == "zotero_recovery_restore_execute":
+                    payload = recovery.execute_restore(
+                        snapshot_id=arguments["snapshot_id"],
+                        library_id=arguments.get("library_id"),
+                        confirm=bool(arguments.get("confirm")),
+                        push_remote=bool(arguments.get("push_remote")),
+                        apply_local=bool(arguments.get("apply_local")),
                     )
                 elif name == "zotero_list_libraries":
                     payload = merged_libraries(store, canonical)

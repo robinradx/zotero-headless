@@ -48,6 +48,7 @@ from .installer_update import build_update_plan, run_update, version_payload
 from .local_db import LocalZoteroDB
 from .mcp import run_stdio_server
 from .qmd import QmdAutoIndexer, QmdClient
+from .recovery import RecoveryService
 from .raw_cli import build_parser as build_parser
 from .raw_cli import main as raw_main
 from .service import HeadlessService
@@ -68,12 +69,14 @@ daemon_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="In
 sync_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Human-friendly remote sync commands.")
 local_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Human-friendly local desktop interoperability commands.")
 citations_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Manage the auto-generated citations database export.")
+recovery_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Snapshot, verify, restore, and replicate full headless recovery state.")
 app.add_typer(setup_app, name="setup")
 app.add_typer(skill_app, name="skill")
 app.add_typer(daemon_app, name="daemon")
 app.add_typer(sync_app, name="sync")
 app.add_typer(local_app, name="local")
 app.add_typer(citations_app, name="citations")
+app.add_typer(recovery_app, name="recovery")
 
 console = Console()
 
@@ -131,8 +134,13 @@ def _runtime_services(settings: Settings):
     qmd_indexer = QmdAutoIndexer(settings)
     sync_service = SyncService(settings, store, qmd_indexer=qmd_indexer)
     service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
-    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
+    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer, settings=settings)
     return canonical, store, qmd_indexer, sync_service, service, local_adapter
+
+
+def _recovery_service(settings: Settings) -> RecoveryService:
+    canonical, _, qmd_indexer, _, _, _ = _runtime_services(settings)
+    return RecoveryService(settings, canonical=canonical, qmd_indexer=qmd_indexer)
 
 
 def _library_table(entries: list[dict[str, object]]) -> Table:
@@ -528,6 +536,120 @@ def citations_export_command(
         output_path=path,
     )
     _emit(ctx, payload, renderer=render_config_payload, title="Citations")
+
+
+@recovery_app.command("repositories")
+def recovery_repositories_command(ctx: typer.Context) -> None:
+    _emit(ctx, _recovery_service(_human_settings()).repositories(), title="Recovery repositories")
+
+
+@recovery_app.command("snapshot-create")
+def recovery_snapshot_create_command(
+    ctx: typer.Context,
+    reason: str = typer.Option("manual", "--reason"),
+) -> None:
+    _emit(ctx, _recovery_service(_human_settings()).create_snapshot(reason=reason), title="Recovery snapshot")
+
+
+@recovery_app.command("snapshot-list")
+def recovery_snapshot_list_command(
+    ctx: typer.Context,
+    limit: int = typer.Option(20, "-n", "--limit"),
+) -> None:
+    _emit(ctx, _recovery_service(_human_settings()).list_snapshots(limit=limit), title="Recovery snapshots")
+
+
+@recovery_app.command("snapshot-show")
+def recovery_snapshot_show_command(
+    ctx: typer.Context,
+    snapshot_id: str = typer.Argument(...),
+) -> None:
+    _emit(ctx, _recovery_service(_human_settings()).get_snapshot(snapshot_id), title="Recovery snapshot")
+
+
+@recovery_app.command("snapshot-verify")
+def recovery_snapshot_verify_command(
+    ctx: typer.Context,
+    snapshot_id: str = typer.Argument(...),
+) -> None:
+    _emit(ctx, _recovery_service(_human_settings()).verify_snapshot(snapshot_id), title="Recovery verify")
+
+
+@recovery_app.command("snapshot-push")
+def recovery_snapshot_push_command(
+    ctx: typer.Context,
+    snapshot_id: str = typer.Argument(...),
+    repository: str = typer.Option(..., "--repository"),
+) -> None:
+    _emit(
+        ctx,
+        _recovery_service(_human_settings()).push_snapshot(snapshot_id, repository=repository),
+        title="Recovery push",
+    )
+
+
+@recovery_app.command("snapshot-pull")
+def recovery_snapshot_pull_command(
+    ctx: typer.Context,
+    snapshot_id: str = typer.Argument(...),
+    repository: str = typer.Option(..., "--repository"),
+) -> None:
+    _emit(
+        ctx,
+        _recovery_service(_human_settings()).pull_snapshot(snapshot_id, repository=repository),
+        title="Recovery pull",
+    )
+
+
+@recovery_app.command("restore-plan")
+def recovery_restore_plan_command(
+    ctx: typer.Context,
+    snapshot_id: str = typer.Option(..., "--snapshot"),
+    library: str | None = typer.Option(None, "--library"),
+) -> None:
+    _emit(
+        ctx,
+        _recovery_service(_human_settings()).plan_restore(snapshot_id=snapshot_id, library_id=library),
+        title="Recovery restore plan",
+    )
+
+
+@recovery_app.command("restore-list")
+def recovery_restore_list_command(
+    ctx: typer.Context,
+    limit: int = typer.Option(20, "-n", "--limit"),
+) -> None:
+    _emit(ctx, _recovery_service(_human_settings()).list_restore_runs(limit=limit), title="Recovery restores")
+
+
+@recovery_app.command("restore-show")
+def recovery_restore_show_command(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(...),
+) -> None:
+    _emit(ctx, _recovery_service(_human_settings()).get_restore_run(run_id), title="Recovery restore")
+
+
+@recovery_app.command("restore-execute")
+def recovery_restore_execute_command(
+    ctx: typer.Context,
+    snapshot_id: str = typer.Option(..., "--snapshot"),
+    library: str | None = typer.Option(None, "--library"),
+    push_remote: bool = typer.Option(False, "--push-remote"),
+    apply_local: bool = typer.Option(False, "--apply-local"),
+    confirm: bool = typer.Option(False, "--confirm"),
+) -> None:
+    _emit(
+        ctx,
+        _recovery_service(_human_settings()).execute_restore(
+            snapshot_id=snapshot_id,
+            library_id=library,
+            push_remote=push_remote,
+            apply_local=apply_local,
+            confirm=confirm,
+        ),
+        title="Recovery restore",
+    )
 
 
 @app.command(

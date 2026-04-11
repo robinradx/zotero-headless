@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urlparse
 
+from ..config import Settings
 from ..core import CanonicalStore, ChangeRecord, ChangeType, EntityType
 from ..local_db import LocalZoteroDB, LocalZoteroWriteDB
 from ..qmd import QmdAutoIndexer
@@ -74,9 +75,16 @@ class LocalDesktopAdapter:
         "image/bmp": "bmp",
     }
 
-    def __init__(self, canonical: CanonicalStore, *, qmd_indexer: QmdAutoIndexer | None = None):
+    def __init__(
+        self,
+        canonical: CanonicalStore,
+        *,
+        qmd_indexer: QmdAutoIndexer | None = None,
+        settings: Settings | None = None,
+    ):
         self.canonical = canonical
         self.qmd_indexer = qmd_indexer
+        self.settings = settings
 
     def _refresh_qmd(self, library_id: str) -> None:
         if not self.qmd_indexer:
@@ -144,7 +152,7 @@ class LocalDesktopAdapter:
             payload["citationAliases"] = citation_aliases
         return payload
 
-    def import_snapshot(self, data_dir: str) -> dict[str, object]:
+    def import_snapshot(self, data_dir: str, *, record_recovery_snapshot: bool = True) -> dict[str, object]:
         db = self._db(data_dir)
         summaries: list[dict[str, object]] = []
         totals = {
@@ -237,11 +245,20 @@ class LocalDesktopAdapter:
             totals["deleted_collections"] += deleted_collections
             totals["deleted_items"] += deleted_items
 
-        return {
+        result = {
             **totals,
             "data_dir": str(Path(data_dir).expanduser()),
             "libraries_detail": summaries,
         }
+        if record_recovery_snapshot and self.settings and self.settings.recovery_auto_snapshots:
+            from ..recovery import RecoveryService
+
+            result["recovery_snapshot"] = RecoveryService(
+                self.settings,
+                canonical=self.canonical,
+                qmd_indexer=self.qmd_indexer,
+            ).create_snapshot(reason="post-local-import")
+        return result
 
     def poll_changes(self, data_dir: str, *, since_version: int | None = None) -> list[ChangeRecord]:
         db = self._db(data_dir)
@@ -412,6 +429,15 @@ class LocalDesktopAdapter:
         library_id: str | None = None,
         limit: int = 1000,
     ) -> dict[str, object]:
+        recovery_snapshot = None
+        if self.settings and self.settings.recovery_auto_snapshots:
+            from ..recovery import RecoveryService
+
+            recovery_snapshot = RecoveryService(
+                self.settings,
+                canonical=self.canonical,
+                qmd_indexer=self.qmd_indexer,
+            ).create_snapshot(reason=f"pre-local-apply:{library_id or 'all'}")
         plan = self.plan_pending_writes(data_dir, library_id=library_id, limit=limit)
         writer = self._write_db(data_dir)
         applied: list[dict[str, object]] = []
@@ -428,8 +454,8 @@ class LocalDesktopAdapter:
             except Exception as exc:
                 failed.append({**operation, "error": str(exc)})
 
-        snapshot = self.import_snapshot(data_dir)
-        return {
+        snapshot = self.import_snapshot(data_dir, record_recovery_snapshot=False)
+        result = {
             "data_dir": str(Path(data_dir).expanduser()),
             "libraries": plan["libraries"],
             "applied": len(applied),
@@ -440,6 +466,17 @@ class LocalDesktopAdapter:
             "failed_operations": failed,
             "snapshot": snapshot,
         }
+        if recovery_snapshot:
+            result["recovery_snapshot"] = recovery_snapshot
+        if self.settings and self.settings.recovery_auto_snapshots:
+            from ..recovery import RecoveryService
+
+            result["post_recovery_snapshot"] = RecoveryService(
+                self.settings,
+                canonical=self.canonical,
+                qmd_indexer=self.qmd_indexer,
+            ).create_snapshot(reason=f"post-local-apply:{library_id or 'all'}")
+        return result
 
     def plan_pending_writes(
         self,

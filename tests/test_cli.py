@@ -1,5 +1,6 @@
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from types import SimpleNamespace
@@ -102,6 +103,18 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("Citations path: /tmp/zhl-state/citations.json", output)
         self.assertIn("Warnings:", output)
         self.assertIn("qmd is not installed.", output)
+
+    def test_recovery_repositories_can_emit_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            buffer = io.StringIO()
+            settings = Settings(state_dir=tmp, backup_repositories=[{"name": "archive", "type": "filesystem", "path": "/tmp/archive"}])
+            with patch("zotero_headless.cli.load_settings", return_value=settings), redirect_stdout(buffer):
+                exit_code = main(["--json", "recovery", "repositories"])
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(buffer.getvalue())
+            self.assertEqual(payload[0]["name"], "local")
+            self.assertEqual(payload[1]["name"], "archive")
 
 
 if __name__ == "__main__":

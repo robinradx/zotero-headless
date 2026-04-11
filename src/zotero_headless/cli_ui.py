@@ -257,6 +257,7 @@ def render_setup_result(payload: dict[str, Any]) -> str:
         f"qmd collection: {settings.get('qmd_collection')}",
         f"Citations export: {_bool_text(bool(settings.get('citation_export_enabled')))} ({settings.get('citation_export_format')})",
         f"Citations path: {citation_export_path}",
+        f"Recovery snapshots: {_bool_text(settings.get('recovery_auto_snapshots', True))}",
     ]
     if autodiscovered:
         lines.append("Autodiscovered:")
@@ -285,7 +286,7 @@ def render_doctor_report(report: dict[str, Any]) -> str:
         lines.append(f"- {_label(key)}: {value or 'not found'}")
 
     lines.extend(["", "Settings:"])
-    for key in ("state_dir", "headless_db", "mirror_db", "export_dir", "file_cache_dir", "data_dir", "local_db"):
+    for key in ("state_dir", "headless_db", "mirror_db", "export_dir", "file_cache_dir", "recovery_snapshot_dir", "recovery_temp_dir", "data_dir", "local_db"):
         lines.append(f"- {_label(key)}: {settings.get(key) or 'not configured'}")
     lines.append(f"- API key configured: {_bool_text(settings.get('api_key_configured'))}")
 

@@ -13,6 +13,7 @@
 - Zotero web sync
 - local Zotero desktop interoperability
 - qmd-backed semantic search that is automatically refreshed from library changes
+- built-in recovery snapshots and restore tooling with optional external backup repositories
 - compatibility with the agent tool of your choice through API or MCP
 
 All three main interfaces are first-class:
@@ -49,6 +50,7 @@ This project is still early-stage. The codebase already includes:
 - qmd export plus semantic search over Markdown derived from headless state, with automatic refresh on dataset changes
 - MCP setup helpers for common agent tools
 - runtime observability endpoints and background sync status
+- recovery snapshots, restore planning, restore execution, and backup replication targets
 
 Current upstream compatibility baseline:
 
@@ -65,6 +67,7 @@ Typical end-user use cases:
 - sync against Zotero web libraries without requiring the Zotero GUI to be running
 - work against a local desktop Zotero profile when local interoperability is needed
 - query library content through qmd-backed semantic search flows without manually rebuilding the qmd index after normal sync/write activity
+- create safety snapshots before risky operations and restore whole state or a single library after a bad change
 
 This repository also contains contribution and architecture material because the project is still evolving, but the repo is not meant only for contributors.
 
@@ -162,6 +165,51 @@ The CLI is now split by audience:
 - strict programmatic CLI usage lives under `zhl raw ...`
 
 Use `zhl raw ...` when you want non-interactive, automation-friendly command paths that mirror the underlying data operations closely.
+
+## Recovery
+
+`zotero-headless` now includes a built-in recovery subsystem for all library types.
+
+It snapshots the full headless runtime boundary:
+
+- canonical DB
+- mirror DB
+- cached files
+- qmd export output
+- citation export artifact
+
+You can inspect configured repositories:
+
+```text
+zhl recovery repositories
+```
+
+Create a snapshot:
+
+```text
+zhl recovery snapshot-create --reason "before bulk edits"
+```
+
+Plan a rollback for one library:
+
+```text
+zhl recovery restore-plan --snapshot <snapshot_id> --library group:123
+```
+
+Execute a rollback:
+
+```text
+zhl recovery restore-execute --snapshot <snapshot_id> --library group:123 --confirm
+```
+
+Replicate a snapshot to an external repository:
+
+```text
+zhl recovery snapshot-push <snapshot_id> --repository s3-primary
+zhl recovery snapshot-push <snapshot_id> --repository lab-rsync
+```
+
+See [docs/RECOVERY.md](./docs/RECOVERY.md) for configuration and API details.
 
 Autodiscovery looks for:
 

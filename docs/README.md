@@ -16,6 +16,8 @@ Start here if you want to understand which part of the tool you need, how to dri
   - how local profile import, staged planning, and narrow apply/writeback work
 - [REMOTE_SYNC.md](./REMOTE_SYNC.md)
   - how remote Zotero Web API sync works for personal and group libraries
+- [RECOVERY.md](./RECOVERY.md)
+  - snapshot, restore, and off-machine backup workflows for local, remote, and group-library safety
 - [DESKTOP_HELPER.md](./DESKTOP_HELPER.md)
   - optional contributor workflow for the externally patched Zotero helper path
 - [ZOTERO_SOURCE_NOTES.md](./ZOTERO_SOURCE_NOTES.md)
@@ -32,6 +34,7 @@ If you want a server-style runtime with no Zotero GUI:
 
 - read [USE_CASES.md](./USE_CASES.md)
 - then read [REMOTE_SYNC.md](./REMOTE_SYNC.md)
+- then read [RECOVERY.md](./RECOVERY.md)
 - then read [API_AND_MCP.md](./API_AND_MCP.md)
 
 If you mostly care about commands:

@@ -24,6 +24,10 @@ class Settings:
     citation_export_path: str | None = None
     file_cache_dir: str | None = None
     qmd_collection: str = "zotero-headless"
+    recovery_snapshot_dir: str | None = None
+    recovery_temp_dir: str | None = None
+    recovery_auto_snapshots: bool = True
+    backup_repositories: list[dict[str, object]] = field(default_factory=list)
     zotero_bin: str | None = None
     daemon_host: str = "127.0.0.1"
     daemon_port: int = 23119
@@ -49,6 +53,16 @@ class Settings:
     def resolved_file_cache_dir(self) -> Path:
         return Path(self.file_cache_dir).expanduser() if self.file_cache_dir else self.resolved_state_dir() / "files"
 
+    def resolved_recovery_snapshot_dir(self) -> Path:
+        if self.recovery_snapshot_dir:
+            return Path(self.recovery_snapshot_dir).expanduser()
+        return self.resolved_state_dir() / "snapshots"
+
+    def resolved_recovery_temp_dir(self) -> Path:
+        if self.recovery_temp_dir:
+            return Path(self.recovery_temp_dir).expanduser()
+        return self.resolved_state_dir() / "recovery-tmp"
+
     def resolved_local_db(self) -> Path | None:
         if not self.data_dir:
             return None
@@ -61,6 +75,8 @@ class Settings:
         ensure_dir(self.resolved_file_cache_dir())
         ensure_dir(self.resolved_canonical_db().parent)
         ensure_dir(self.resolved_mirror_db().parent)
+        ensure_dir(self.resolved_recovery_snapshot_dir())
+        ensure_dir(self.resolved_recovery_temp_dir())
 
     def as_dict(self) -> dict:
         return asdict(self)

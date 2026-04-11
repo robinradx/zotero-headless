@@ -43,6 +43,7 @@ from .installer_update import build_update_plan, run_update, version_payload
 from .local_db import LocalZoteroDB
 from .mcp import run_stdio_server
 from .qmd import QmdAutoIndexer, QmdClient
+from .recovery import RecoveryService
 from .setup_wizard import run_setup_wizard
 from .service import HeadlessService, LocalWriteRequiresDaemonError
 from .store import MirrorStore
@@ -161,6 +162,41 @@ def _add_machine_commands(sub) -> None:
     api_serve = api_sub.add_parser("serve")
     api_serve.add_argument("--host", default="127.0.0.1")
     api_serve.add_argument("--port", type=int, default=8787)
+
+    recovery = sub.add_parser("recovery")
+    recovery_sub = recovery.add_subparsers(dest="recovery_command", required=True)
+    recovery_sub.add_parser("repositories")
+    recovery_snapshot = recovery_sub.add_parser("snapshot")
+    recovery_snapshot_sub = recovery_snapshot.add_subparsers(dest="recovery_snapshot_command", required=True)
+    recovery_snapshot_create = recovery_snapshot_sub.add_parser("create")
+    recovery_snapshot_create.add_argument("--reason", default="manual")
+    recovery_snapshot_list = recovery_snapshot_sub.add_parser("list")
+    recovery_snapshot_list.add_argument("-n", "--limit", type=int, default=20)
+    recovery_snapshot_show = recovery_snapshot_sub.add_parser("show")
+    recovery_snapshot_show.add_argument("snapshot_id")
+    recovery_snapshot_verify = recovery_snapshot_sub.add_parser("verify")
+    recovery_snapshot_verify.add_argument("snapshot_id")
+    recovery_snapshot_push = recovery_snapshot_sub.add_parser("push")
+    recovery_snapshot_push.add_argument("snapshot_id")
+    recovery_snapshot_push.add_argument("--repository", required=True)
+    recovery_snapshot_pull = recovery_snapshot_sub.add_parser("pull")
+    recovery_snapshot_pull.add_argument("snapshot_id")
+    recovery_snapshot_pull.add_argument("--repository", required=True)
+    recovery_restore = recovery_sub.add_parser("restore")
+    recovery_restore_sub = recovery_restore.add_subparsers(dest="recovery_restore_command", required=True)
+    recovery_restore_list = recovery_restore_sub.add_parser("list")
+    recovery_restore_list.add_argument("-n", "--limit", type=int, default=20)
+    recovery_restore_show = recovery_restore_sub.add_parser("show")
+    recovery_restore_show.add_argument("run_id")
+    recovery_restore_plan = recovery_restore_sub.add_parser("plan")
+    recovery_restore_plan.add_argument("--snapshot", required=True, dest="snapshot_id")
+    recovery_restore_plan.add_argument("--library")
+    recovery_restore_execute = recovery_restore_sub.add_parser("execute")
+    recovery_restore_execute.add_argument("--snapshot", required=True, dest="snapshot_id")
+    recovery_restore_execute.add_argument("--library")
+    recovery_restore_execute.add_argument("--push-remote", action="store_true")
+    recovery_restore_execute.add_argument("--apply-local", action="store_true")
+    recovery_restore_execute.add_argument("--confirm", action="store_true")
 
     mcp = sub.add_parser("mcp")
     mcp_sub = mcp.add_subparsers(dest="mcp_command", required=True)
@@ -323,6 +359,10 @@ def main(argv: list[str] | None = None) -> int:
                 citation_export_path=settings.citation_export_path,
                 file_cache_dir=str(settings.resolved_file_cache_dir()),
                 qmd_collection=settings.qmd_collection,
+                recovery_snapshot_dir=str(settings.resolved_recovery_snapshot_dir()),
+                recovery_temp_dir=str(settings.resolved_recovery_temp_dir()),
+                recovery_auto_snapshots=settings.recovery_auto_snapshots,
+                backup_repositories=list(settings.backup_repositories),
                 zotero_bin=args.zotero_bin or settings.zotero_bin,
                 daemon_host=settings.daemon_host,
                 daemon_port=settings.daemon_port,
@@ -468,7 +508,8 @@ def main(argv: list[str] | None = None) -> int:
     qmd_indexer = QmdAutoIndexer(settings)
     sync_service = SyncService(settings, store, qmd_indexer=qmd_indexer)
     service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
-    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
+    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer, settings=settings)
+    recovery = RecoveryService(settings, canonical=canonical, qmd_indexer=qmd_indexer)
 
     if command == "core":
         if args.core_command == "status":
@@ -562,6 +603,51 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
+
+    if command == "recovery":
+        if args.recovery_command == "repositories":
+            _print(recovery.repositories())
+            return 0
+        if args.recovery_command == "snapshot":
+            if args.recovery_snapshot_command == "create":
+                _print(recovery.create_snapshot(reason=args.reason))
+                return 0
+            if args.recovery_snapshot_command == "list":
+                _print(recovery.list_snapshots(limit=args.limit))
+                return 0
+            if args.recovery_snapshot_command == "show":
+                _print(recovery.get_snapshot(args.snapshot_id))
+                return 0
+            if args.recovery_snapshot_command == "verify":
+                _print(recovery.verify_snapshot(args.snapshot_id))
+                return 0
+            if args.recovery_snapshot_command == "push":
+                _print(recovery.push_snapshot(args.snapshot_id, repository=args.repository))
+                return 0
+            if args.recovery_snapshot_command == "pull":
+                _print(recovery.pull_snapshot(args.snapshot_id, repository=args.repository))
+                return 0
+        if args.recovery_command == "restore":
+            if args.recovery_restore_command == "list":
+                _print(recovery.list_restore_runs(limit=args.limit))
+                return 0
+            if args.recovery_restore_command == "show":
+                _print(recovery.get_restore_run(args.run_id))
+                return 0
+            if args.recovery_restore_command == "plan":
+                _print(recovery.plan_restore(snapshot_id=args.snapshot_id, library_id=args.library))
+                return 0
+            if args.recovery_restore_command == "execute":
+                _print(
+                    recovery.execute_restore(
+                        snapshot_id=args.snapshot_id,
+                        library_id=args.library,
+                        confirm=bool(args.confirm),
+                        push_remote=bool(args.push_remote),
+                        apply_local=bool(args.apply_local),
+                    )
+                )
+                return 0
 
     if command == "sync":
         if args.sync_command == "discover":

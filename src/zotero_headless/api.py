@@ -17,6 +17,7 @@ from .library_routing import merged_libraries, prefers_canonical_reads
 from .local_db import LocalZoteroDB
 from .observability import build_metrics_text, read_jobs_state, read_runtime_state, record_http_request
 from .qmd import QmdAutoIndexer, QmdClient
+from .recovery import RecoveryService
 from .service import HeadlessService, LocalWriteRequiresDaemonError
 from .store import MirrorStore
 from .sync import SyncService
@@ -29,7 +30,8 @@ def make_handler(settings: Settings, store: MirrorStore):
     sync_service = SyncService(settings, store, qmd_indexer=qmd_indexer)
     service = HeadlessService(settings, store, canonical, qmd_indexer=qmd_indexer)
     qmd = QmdClient(settings)
-    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer)
+    local_adapter = LocalDesktopAdapter(canonical, qmd_indexer=qmd_indexer, settings=settings)
+    recovery = RecoveryService(settings, canonical=canonical, qmd_indexer=qmd_indexer)
 
     def canonical_sync() -> CanonicalWebSyncAdapter:
         return CanonicalWebSyncAdapter(canonical, ZoteroWebClient(settings), qmd_indexer=qmd_indexer)
@@ -104,6 +106,18 @@ def make_handler(settings: Settings, store: MirrorStore):
                 library_id = params.get("library_id", [None])[0]
                 limit = int(params.get("limit", ["100"])[0])
                 return self._json_response(200, {"changes": canonical.list_changes(library_id=library_id, limit=limit)})
+            if parsed.path == "/recovery/repositories":
+                return self._json_response(200, {"repositories": recovery.repositories()})
+            if parsed.path == "/recovery/snapshots":
+                limit = int(params.get("limit", ["20"])[0])
+                return self._json_response(200, {"snapshots": recovery.list_snapshots(limit=limit)})
+            if len(parts) == 3 and parts[0] == "recovery" and parts[1] == "snapshots":
+                return self._json_response(200, recovery.get_snapshot(parts[2]))
+            if parsed.path == "/recovery/restores":
+                limit = int(params.get("limit", ["20"])[0])
+                return self._json_response(200, {"restores": recovery.list_restore_runs(limit=limit)})
+            if len(parts) == 3 and parts[0] == "recovery" and parts[1] == "restores":
+                return self._json_response(200, recovery.get_restore_run(parts[2]))
             if parsed.path == "/sync/conflicts":
                 library_id = params.get("library_id", [None])[0]
                 if not library_id:
@@ -166,6 +180,7 @@ def make_handler(settings: Settings, store: MirrorStore):
             self._request_started_at = time.perf_counter()
             parsed = urlparse(self.path)
             body = self._read_json()
+            parts = [part for part in parsed.path.split("/") if part]
             if parsed.path == "/sync/discover":
                 return self._json_response(200, {"libraries": canonical_sync().discover_libraries()})
             if parsed.path == "/sync/pull":
@@ -244,6 +259,39 @@ def make_handler(settings: Settings, store: MirrorStore):
                         limit=int(body.get("limit", 1000)),
                     ),
                 )
+            if parsed.path == "/recovery/snapshots":
+                return self._json_response(200, recovery.create_snapshot(reason=str(body.get("reason") or "manual")))
+            if parsed.path == "/recovery/restore/plan":
+                return self._json_response(
+                    200,
+                    recovery.plan_restore(
+                        snapshot_id=str(body["snapshot_id"]),
+                        library_id=body.get("library_id"),
+                    ),
+                )
+            if parsed.path == "/recovery/restore/execute":
+                return self._json_response(
+                    200,
+                    recovery.execute_restore(
+                        snapshot_id=str(body["snapshot_id"]),
+                        library_id=body.get("library_id"),
+                        confirm=bool(body.get("confirm")),
+                        push_remote=bool(body.get("push_remote")),
+                        apply_local=bool(body.get("apply_local")),
+                    ),
+                )
+            if len(parts) == 4 and parts[0] == "recovery" and parts[1] == "snapshots" and parts[3] == "verify":
+                return self._json_response(200, recovery.verify_snapshot(parts[2]))
+            if len(parts) == 4 and parts[0] == "recovery" and parts[1] == "snapshots" and parts[3] == "push":
+                return self._json_response(
+                    200,
+                    recovery.push_snapshot(parts[2], repository=str(body["repository"])),
+                )
+            if len(parts) == 4 and parts[0] == "recovery" and parts[1] == "snapshots" and parts[3] == "pull":
+                return self._json_response(
+                    200,
+                    recovery.pull_snapshot(parts[2], repository=str(body["repository"])),
+                )
             if parsed.path == "/search/export":
                 library_id = body.get("library_id")
                 if library_id:
@@ -281,7 +329,6 @@ def make_handler(settings: Settings, store: MirrorStore):
                     metadata=body.get("metadata") or {},
                 )
                 return self._json_response(200, library)
-            parts = [part for part in parsed.path.split("/") if part]
             if len(parts) == 3 and parts[0] == "libraries" and parts[2] == "items":
                 library_id = parts[1]
                 try:

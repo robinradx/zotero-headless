@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import tarfile
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -499,7 +500,7 @@ class RecoveryService:
     def _library_inventory(self, canonical_db_path: Path) -> list[dict[str, Any]]:
         if not canonical_db_path.exists():
             return []
-        with sqlite3.connect(canonical_db_path) as conn:
+        with closing(sqlite3.connect(canonical_db_path)) as conn:
             conn.row_factory = sqlite3.Row
             libraries = conn.execute(
                 """
@@ -645,7 +646,7 @@ class RecoveryService:
 
     def _backup_sqlite(self, source: Path, destination: Path) -> None:
         ensure_dir(destination.parent)
-        with sqlite3.connect(source) as src, sqlite3.connect(destination) as dst:
+        with closing(sqlite3.connect(source)) as src, closing(sqlite3.connect(destination)) as dst:
             src.backup(dst)
 
     def _restore_sqlite_file(self, source: Path, destination: Path) -> None:
@@ -656,7 +657,7 @@ class RecoveryService:
             sidecar = destination.with_name(destination.name + suffix)
             if sidecar.exists():
                 sidecar.unlink()
-        with sqlite3.connect(source) as src, sqlite3.connect(temp_destination) as dst:
+        with closing(sqlite3.connect(source)) as src, closing(sqlite3.connect(temp_destination)) as dst:
             src.backup(dst)
         temp_destination.replace(destination)
 

@@ -1,6 +1,5 @@
 // src/index.ts
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
-import type { OpenClawPluginApi, AnyAgentTool } from "openclaw/plugin-sdk";
 import { DaemonClient } from "./clients/daemon-client.js";
 import { UnifiedClient } from "./client.js";
 import { createStatusTool } from "./tools/status.js";
@@ -21,7 +20,7 @@ export default definePluginEntry({
   description:
     "Zotero library access via zotero-headless daemon — search, items, collections, sync, export",
 
-  register(api: OpenClawPluginApi) {
+  register(api) {
     const pluginCfg = (api.pluginConfig ?? {}) as ZoteroPluginConfig;
 
     // Resolve config with defaults
@@ -39,14 +38,14 @@ export default definePluginEntry({
     const client = new UnifiedClient(daemon);
 
     // Register tools
-    api.registerTool(createStatusTool(client, pluginCfg) as unknown as AnyAgentTool);
-    api.registerTool(createSearchTool(client, pluginCfg) as unknown as AnyAgentTool);
-    api.registerTool(createItemTool(client, pluginCfg) as unknown as AnyAgentTool);
-    api.registerTool(createCollectionsTool(client, pluginCfg) as unknown as AnyAgentTool);
-    api.registerTool(createSyncTool(client, pluginCfg) as unknown as AnyAgentTool);
-    api.registerTool(createAttachmentsTool(client, pluginCfg) as unknown as AnyAgentTool);
-    api.registerTool(createExportTool(client, pluginCfg) as unknown as AnyAgentTool);
-    api.registerTool(createBackupTool(client, pluginCfg) as unknown as AnyAgentTool);
+    api.registerTool(createStatusTool(client, pluginCfg));
+    api.registerTool(createSearchTool(client, pluginCfg));
+    api.registerTool(createItemTool(client, pluginCfg));
+    api.registerTool(createCollectionsTool(client, pluginCfg));
+    api.registerTool(createSyncTool(client, pluginCfg));
+    api.registerTool(createAttachmentsTool(client, pluginCfg));
+    api.registerTool(createExportTool(client, pluginCfg));
+    api.registerTool(createBackupTool(client, pluginCfg));
 
     // Register chat command
     api.registerCommand(createZoteroCommand(client, pluginCfg));

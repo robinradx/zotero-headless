@@ -77,12 +77,13 @@ This installs the local Codex plugin bundle with:
 
 #### Claude Code
 
-Use Claude Code's MCP config plus the matching skill pack.
+Use the Claude Code plugin bundle.
 
 ```text
-zhl setup add claude-code --scope project
-zhl skill install claude-code
+zhl plugin install claude-code
 ```
+
+This installs the repo-local Claude Code plugin bundle and refreshes its bundled `.mcp.json` from your local settings.
 
 #### OpenClaw
 
@@ -260,8 +261,7 @@ zhl raw sync discover
 ```text
 uv tool install zotero-headless
 zhl setup start
-zhl setup add claude-code --scope project
-zhl skill install claude-code
+zhl plugin install claude-code
 ```
 
 ### OpenClaw
@@ -289,11 +289,10 @@ zhl setup list
 
 ```text
 zhl plugin install codex
+zhl plugin install claude-code
 zhl plugin install openclaw
 zhl setup add codex --scope user
-zhl setup add claude-code --scope project
 zhl skill install codex
-zhl skill install claude-code
 zhl skill install openclaw
 zhl skill export claude-desktop
 ```

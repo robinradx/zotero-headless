@@ -59,10 +59,11 @@ Install the repo-local Codex plugin bundle:
 
 ```text
 zhl plugin install codex
+zhl plugin install claude-code
 zhl plugin install openclaw
 ```
 
-The Codex bundle includes the MCP config, a focused Zotero skill pack, research and sync agents, and a startup status hook.
+The Codex bundle includes the MCP config, a focused Zotero skill pack, research and sync agents, and a startup status hook. `zhl plugin install claude-code` installs the matching Claude Code plugin bundle and refreshes its bundled `.mcp.json` from your local settings.
 
 For OpenClaw's native integration, run `zhl plugin install openclaw`. That shells out to `openclaw plugins install -l ./plugins/openclaw-plugin-zotero` and then enables `zotero`.
 

@@ -93,6 +93,26 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("openclaw", output)
         self.assertIn("/tmp/home/.openclaw/openclaw.json", output)
 
+    def test_plugin_install_claude_code_uses_human_output_by_default(self):
+        buffer = io.StringIO()
+        fake_result = {
+            "target": "claude-code",
+            "installed": True,
+            "path": "/tmp/home/.claude/plugins/zotero-headless-claude-code",
+            "instructions": ["Restart Claude Code if needed."],
+        }
+        with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
+            "zotero_headless.cli.install_plugin",
+            return_value=fake_result,
+        ), redirect_stdout(buffer):
+            exit_code = main(["plugin", "install", "claude-code"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Plugin installed", output)
+        self.assertIn("claude-code", output)
+        self.assertIn("/tmp/home/.claude/plugins/zotero-headless-claude-code", output)
+
     def test_citations_status_can_emit_json(self):
         buffer = io.StringIO()
         with patch(

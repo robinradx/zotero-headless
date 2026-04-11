@@ -227,6 +227,37 @@ def _openclaw_setup_instructions(*, cwd: Path | None = None, plugin_path: Path |
     ]
 
 
+def _dedupe_preserve_order(lines: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for line in lines:
+        if line in seen:
+            continue
+        seen.add(line)
+        unique.append(line)
+    return unique
+
+
+def _split_openclaw_messages(raw: str) -> tuple[list[str], list[str]]:
+    """Split benign OpenClaw install chatter from actionable stderr."""
+    stderr_lines: list[str] = []
+    notes: list[str] = []
+    for raw_line in raw.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if "Zotero: daemon unavailable." in line:
+            notes.append(
+                "OpenClaw loaded the plugin, but the zotero-headless daemon was not reachable during install."
+            )
+            continue
+        if line.startswith("Config overwrite: "):
+            notes.append(line)
+            continue
+        stderr_lines.append(line)
+    return _dedupe_preserve_order(stderr_lines), _dedupe_preserve_order(notes)
+
+
 def _install_openclaw_plugin(
     *,
     cwd: Path | None = None,
@@ -292,6 +323,20 @@ def _install_openclaw_plugin(
         capture_output=True,
         text=True,
     )
+    stdout = "\n".join(part for part in (install.stdout.strip(), enable.stdout.strip()) if part)
+    raw_stderr = "\n".join(part for part in (install.stderr.strip(), enable.stderr.strip()) if part)
+    stderr_lines, note_lines = _split_openclaw_messages(raw_stderr)
+    notes = [
+        f"Already ran `openclaw plugins install -l {managed_plugin_path}`.",
+        f"Already ran `openclaw plugins enable {OPENCLAW_PLUGIN_ID}`.",
+    ]
+    notes.extend(note_lines)
+    notes.extend(
+        [
+            f"Inspect the plugin with `openclaw plugins inspect {OPENCLAW_PLUGIN_ID}` if you want to verify the active config.",
+            "Install the matching skill with `zhl skill install openclaw` for better agent routing.",
+        ]
+    )
     return {
         "target": "openclaw",
         "written": enable.returncode == 0,
@@ -303,14 +348,9 @@ def _install_openclaw_plugin(
             "plugin_path": str(managed_plugin_path),
             "source_path": str(plugin_path),
         },
-        "stdout": "\n".join(part for part in (install.stdout.strip(), enable.stdout.strip()) if part),
-        "stderr": "\n".join(part for part in (install.stderr.strip(), enable.stderr.strip()) if part),
-        "notes": [
-            f"Already ran `openclaw plugins install -l {managed_plugin_path}`.",
-            f"Already ran `openclaw plugins enable {OPENCLAW_PLUGIN_ID}`.",
-            f"Inspect the plugin with `openclaw plugins inspect {OPENCLAW_PLUGIN_ID}` if you want to verify the active config.",
-            "Install the matching skill with `zhl skill install openclaw` for better agent routing.",
-        ],
+        "stdout": stdout,
+        "stderr": "\n".join(stderr_lines),
+        "notes": notes,
     }
 
 

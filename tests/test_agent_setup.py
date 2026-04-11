@@ -175,6 +175,42 @@ class AgentSetupTests(unittest.TestCase):
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
+    def test_install_plugin_for_openclaw_demotes_benign_gateway_stderr_to_notes(self, _which, run_mock):
+        benign_stderr = "\n".join(
+            [
+                "Zotero: daemon unavailable. Start zotero-headless and point the plugin at its HTTP endpoint.",
+                "Config overwrite: /root/.openclaw/openclaw.json (sha256 old -> new, backup=/root/.openclaw/openclaw.json.bak)",
+                "Zotero: daemon unavailable. Start zotero-headless and point the plugin at its HTTP endpoint.",
+            ]
+        )
+        run_mock.side_effect = [
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=benign_stderr),
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=benign_stderr),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+            plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
+            (plugin_dir / "src").mkdir(parents=True)
+            (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+            (plugin_dir / "src" / "index.ts").write_text("export default {};\n", encoding="utf-8")
+
+            result = install_plugin("openclaw", Settings(), cwd=cwd, home=home)
+
+            self.assertTrue(result["installed"])
+            self.assertEqual(result["stderr"], "")
+            notes = result["notes"]
+            self.assertIn(
+                "OpenClaw loaded the plugin, but the zotero-headless daemon was not reachable during install.",
+                notes,
+            )
+            self.assertEqual(
+                sum(1 for note in notes if note.startswith("Config overwrite: ")),
+                1,
+            )
+
+    @patch("zotero_headless.agent_setup.subprocess.run")
+    @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
     def test_install_plugin_accepts_open_claw_alias(self, _which, run_mock):
         run_mock.side_effect = [
             CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),

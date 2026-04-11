@@ -127,6 +127,13 @@ def _emit(ctx: typer.Context, payload, *, renderer=None, title: str | None = Non
         console.print(content)
 
 
+def _run_with_status(ctx: typer.Context, message: str, callback):
+    if _state(ctx).json_output:
+        return callback()
+    with console.status(message, spinner="dots"):
+        return callback()
+
+
 def _render_install_results(entries: list[dict[str, object]], *, heading: str) -> str:
     renderables = [render_install_result_rich(entry, heading=heading) for entry in entries]
     return Group(*renderables)
@@ -363,7 +370,11 @@ def setup_add_command(
     tool: str = typer.Argument(..., help="Target client to configure."),
     scope: str = typer.Option("project", "--scope", help="Setup scope."),
 ) -> None:
-    payload = install_mcp_setup(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd(), scope=scope)
+    payload = _run_with_status(
+        ctx,
+        f"Applying setup for {tool}...",
+        lambda: install_mcp_setup(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd(), scope=scope),
+    )
     _emit(ctx, payload, renderer=lambda entry: render_install_result_rich(entry, heading="Setup applied"), title="Setup")
 
 
@@ -373,7 +384,11 @@ def setup_remove_command(
     tool: str = typer.Argument(..., help="Target client to remove."),
     scope: str = typer.Option("project", "--scope", help="Setup scope."),
 ) -> None:
-    payload = remove_mcp_setup(tool, cwd=Path.cwd(), scope=scope)
+    payload = _run_with_status(
+        ctx,
+        f"Removing setup for {tool}...",
+        lambda: remove_mcp_setup(tool, cwd=Path.cwd(), scope=scope),
+    )
     _emit(ctx, payload, renderer=lambda entry: render_install_result_rich(entry, heading="Setup removed"), title="Setup")
 
 
@@ -388,7 +403,11 @@ def skill_install_command(
     tool = normalize_target_name(tool)
     if tool != "all" and tool not in SUPPORTED_SKILL_TARGETS:
         raise typer.BadParameter(f"Unsupported skill target: {tool}")
-    payload = install_skill_set(tool, variant=variant)
+    payload = _run_with_status(
+        ctx,
+        f"Installing skills for {tool}...",
+        lambda: install_skill_set(tool, variant=variant),
+    )
     if tool == "all":
         _emit(ctx, payload, renderer=lambda entries: _render_install_results(entries, heading="Skill installed"), title="Skill")
         return
@@ -410,7 +429,12 @@ def _run_plugin_command(ctx: typer.Context, tool: str, *, heading: str) -> None:
     tool = normalize_target_name(tool)
     if tool != "all" and tool not in SUPPORTED_PLUGIN_TARGETS:
         raise typer.BadParameter(f"Unsupported plugin target: {tool}")
-    payload = install_plugin_set(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd())
+    verb = "Updating" if "updated" in heading.lower() else "Installing"
+    payload = _run_with_status(
+        ctx,
+        f"{verb} plugins for {tool}...",
+        lambda: install_plugin_set(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd()),
+    )
     if tool == "all":
         _emit(ctx, payload, renderer=lambda entries: _render_install_results(entries, heading=heading), title="Plugin")
         return

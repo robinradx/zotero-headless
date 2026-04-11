@@ -117,15 +117,19 @@ class AgentSetupTests(unittest.TestCase):
             home = Path(tmp)
             cwd = home / "project"
             plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
-            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "src").mkdir(parents=True)
             (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+            (plugin_dir / "src" / "index.ts").write_text("export default {};\n", encoding="utf-8")
 
             result = install_mcp_setup("openclaw", Settings(), cwd=cwd, home=home, scope="user")
 
             self.assertTrue(result["written"])
             self.assertEqual(result["config"]["plugin_id"], "zotero")
-            self.assertEqual(Path(result["config"]["plugin_path"]).resolve(), plugin_dir.resolve())
-            self.assertEqual(run_mock.call_args_list[0].args[0], ["/usr/local/bin/openclaw", "plugins", "install", "-l", str(plugin_dir.resolve())])
+            managed = home / ".openclaw" / "plugins" / "openclaw-plugin-zotero"
+            self.assertEqual(Path(result["config"]["plugin_path"]).resolve(), managed.resolve())
+            self.assertTrue((managed / "src" / "openclaw.plugin.json").exists())
+            self.assertEqual(run_mock.call_args_list[0].args[0][:4], ["/usr/local/bin/openclaw", "plugins", "install", "-l"])
+            self.assertEqual(Path(run_mock.call_args_list[0].args[0][4]).resolve(), managed.resolve())
             self.assertEqual(run_mock.call_args_list[1].args[0], ["/usr/local/bin/openclaw", "plugins", "enable", "zotero"])
 
     @patch("zotero_headless.agent_setup.shutil.which", return_value=None)
@@ -134,14 +138,15 @@ class AgentSetupTests(unittest.TestCase):
             home = Path(tmp)
             cwd = home / "project"
             plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
-            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "src").mkdir(parents=True)
             (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+            (plugin_dir / "src" / "index.ts").write_text("export default {};\n", encoding="utf-8")
 
             result = install_mcp_setup("openclaw", Settings(), cwd=cwd, home=home, scope="user")
 
             self.assertFalse(result["written"])
             self.assertEqual(result["reason"], "openclaw_not_found")
-            self.assertTrue(any("openclaw plugins install -l" in line for line in result["instructions"]))
+            self.assertTrue(any(str(home / ".openclaw" / "plugins" / "openclaw-plugin-zotero") in line for line in result["instructions"]))
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
@@ -154,14 +159,18 @@ class AgentSetupTests(unittest.TestCase):
             home = Path(tmp) / "home"
             cwd = Path(tmp) / "repo"
             plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
-            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "src").mkdir(parents=True)
             (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+            (plugin_dir / "src" / "index.ts").write_text("export default {};\n", encoding="utf-8")
 
             result = install_plugin("openclaw", Settings(), cwd=cwd, home=home)
 
             self.assertTrue(result["installed"])
-            self.assertEqual(Path(result["config"]["plugin_path"]).resolve(), plugin_dir.resolve())
-            self.assertEqual(run_mock.call_args_list[0].args[0], ["/usr/local/bin/openclaw", "plugins", "install", "-l", str(plugin_dir.resolve())])
+            managed = home / ".openclaw" / "plugins" / "openclaw-plugin-zotero"
+            self.assertEqual(Path(result["config"]["plugin_path"]).resolve(), managed.resolve())
+            self.assertTrue((managed / "src" / "openclaw.plugin.json").exists())
+            self.assertEqual(run_mock.call_args_list[0].args[0][:4], ["/usr/local/bin/openclaw", "plugins", "install", "-l"])
+            self.assertEqual(Path(run_mock.call_args_list[0].args[0][4]).resolve(), managed.resolve())
             self.assertEqual(run_mock.call_args_list[1].args[0], ["/usr/local/bin/openclaw", "plugins", "enable", "zotero"])
 
     @patch("zotero_headless.agent_setup.subprocess.run")
@@ -175,8 +184,9 @@ class AgentSetupTests(unittest.TestCase):
             home = Path(tmp) / "home"
             cwd = Path(tmp) / "repo"
             plugin_dir = cwd / "plugins" / "openclaw-plugin-zotero"
-            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "src").mkdir(parents=True)
             (plugin_dir / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+            (plugin_dir / "src" / "index.ts").write_text("export default {};\n", encoding="utf-8")
 
             result = install_plugin("open-claw", Settings(), cwd=cwd, home=home)
 
@@ -209,8 +219,9 @@ class AgentSetupTests(unittest.TestCase):
             (claude / ".mcp.json").write_text('{"mcpServers":{}}\n', encoding="utf-8")
 
             openclaw = cwd / "plugins" / "openclaw-plugin-zotero"
-            openclaw.mkdir(parents=True, exist_ok=True)
+            (openclaw / "src").mkdir(parents=True, exist_ok=True)
             (openclaw / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+            (openclaw / "src" / "index.ts").write_text("export default {};\n", encoding="utf-8")
 
             with patch("zotero_headless.agent_setup.subprocess.run") as run_mock, patch(
                 "zotero_headless.agent_setup.shutil.which",
@@ -230,7 +241,9 @@ class AgentSetupTests(unittest.TestCase):
         payload = json.loads(package_json.read_text(encoding="utf-8"))
 
         self.assertEqual(payload["scripts"]["prepare"], "tsc")
-        self.assertEqual(payload["openclaw"]["hooks"], ["./dist/hooks/gateway-sync.js"])
+        self.assertEqual(payload["main"], "src/index.ts")
+        self.assertEqual(payload["openclaw"]["extensions"], ["./src/index.ts"])
+        self.assertEqual(payload["openclaw"]["hooks"], ["./src/hooks/gateway-sync.ts"])
 
     def test_openclaw_plugin_source_does_not_ship_child_process_calls(self):
         root = Path(__file__).resolve().parents[1]

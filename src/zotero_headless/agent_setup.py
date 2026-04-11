@@ -200,8 +200,26 @@ def _openclaw_plugin_path(*, cwd: Path | None = None) -> Path:
     return _openclaw_plugin_candidates(cwd=cwd)[0]
 
 
-def _openclaw_setup_instructions(*, cwd: Path | None = None) -> list[str]:
-    plugin_path = _openclaw_plugin_path(cwd=cwd)
+def _openclaw_managed_plugin_path(*, home: Path | None = None) -> Path:
+    base = (home or Path.home()).expanduser()
+    return base / ".openclaw" / "plugins" / OPENCLAW_PLUGIN_DIRNAME
+
+
+def _prepare_openclaw_plugin_bundle(*, cwd: Path | None = None, home: Path | None = None) -> Path:
+    source = _openclaw_plugin_path(cwd=cwd)
+    destination = _openclaw_managed_plugin_path(home=home)
+    ensure_dir(destination.parent)
+    shutil.copytree(source, destination, dirs_exist_ok=True)
+    manifest = destination / "openclaw.plugin.json"
+    src_manifest = destination / "src" / "openclaw.plugin.json"
+    if manifest.exists():
+        ensure_dir(src_manifest.parent)
+        shutil.copyfile(manifest, src_manifest)
+    return destination
+
+
+def _openclaw_setup_instructions(*, cwd: Path | None = None, plugin_path: Path | None = None) -> list[str]:
+    plugin_path = plugin_path or _openclaw_plugin_path(cwd=cwd)
     return [
         f"Run `openclaw plugins install -l {plugin_path}` to link the local Zotero plugin into OpenClaw.",
         f"Run `openclaw plugins enable {OPENCLAW_PLUGIN_ID}` to enable it.",
@@ -227,8 +245,9 @@ def _install_openclaw_plugin(
             "path": str(config_path),
             "scope": scope,
             "reason": "plugin_not_found",
-            "instructions": _openclaw_setup_instructions(cwd=cwd),
+            "instructions": _openclaw_setup_instructions(cwd=cwd, plugin_path=plugin_path),
         }
+    managed_plugin_path = _prepare_openclaw_plugin_bundle(cwd=cwd, home=home)
     if not binary:
         return {
             "target": "openclaw",
@@ -237,10 +256,15 @@ def _install_openclaw_plugin(
             "path": str(config_path),
             "scope": scope,
             "reason": "openclaw_not_found",
-            "instructions": _openclaw_setup_instructions(cwd=cwd),
+            "config": {
+                "plugin_id": OPENCLAW_PLUGIN_ID,
+                "plugin_path": str(managed_plugin_path),
+                "source_path": str(plugin_path),
+            },
+            "instructions": _openclaw_setup_instructions(cwd=cwd, plugin_path=managed_plugin_path),
         }
     install = subprocess.run(
-        [binary, "plugins", "install", "-l", str(plugin_path)],
+        [binary, "plugins", "install", "-l", str(managed_plugin_path)],
         check=False,
         capture_output=True,
         text=True,
@@ -253,9 +277,14 @@ def _install_openclaw_plugin(
             "path": str(config_path),
             "scope": scope,
             "reason": "openclaw_install_failed",
+            "config": {
+                "plugin_id": OPENCLAW_PLUGIN_ID,
+                "plugin_path": str(managed_plugin_path),
+                "source_path": str(plugin_path),
+            },
             "stdout": install.stdout,
             "stderr": install.stderr,
-            "instructions": _openclaw_setup_instructions(cwd=cwd),
+            "instructions": _openclaw_setup_instructions(cwd=cwd, plugin_path=managed_plugin_path),
         }
     enable = subprocess.run(
         [binary, "plugins", "enable", OPENCLAW_PLUGIN_ID],
@@ -271,12 +300,13 @@ def _install_openclaw_plugin(
         "scope": scope,
         "config": {
             "plugin_id": OPENCLAW_PLUGIN_ID,
-            "plugin_path": str(plugin_path),
+            "plugin_path": str(managed_plugin_path),
+            "source_path": str(plugin_path),
         },
         "stdout": "\n".join(part for part in (install.stdout.strip(), enable.stdout.strip()) if part),
         "stderr": "\n".join(part for part in (install.stderr.strip(), enable.stderr.strip()) if part),
         "notes": [
-            f"Already ran `openclaw plugins install -l {plugin_path}`.",
+            f"Already ran `openclaw plugins install -l {managed_plugin_path}`.",
             f"Already ran `openclaw plugins enable {OPENCLAW_PLUGIN_ID}`.",
             f"Inspect the plugin with `openclaw plugins inspect {OPENCLAW_PLUGIN_ID}` if you want to verify the active config.",
             "Install the matching skill with `zhl skill install openclaw` for better agent routing.",

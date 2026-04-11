@@ -4,131 +4,34 @@
   <img src="./assets/zotero-headless.png" alt="zotero-headless logo" width="220" />
 </p>
 
-`zotero-headless` is an open-source headless Zotero-compatible runtime with:
+`zotero-headless` is a headless Zotero-compatible runtime with:
 
-- a CLI
-- an HTTP API
-- an MCP server
+- a CLI for operators and scripts
+- an HTTP API for apps and services
+- an MCP server for agent tools
 - a clean-room headless store
-- Zotero web sync
-- local Zotero desktop interoperability
-- qmd-backed semantic search that is automatically refreshed from library changes
-- built-in recovery snapshots and restore tooling with optional external backup repositories
-- compatibility with the agent tool of your choice through API or MCP
-
-All three main interfaces are first-class:
-
-- CLI
-  - good for humans, scripts, and shell automation
-- HTTP API
-  - good for apps, services, agents, and direct integrations
-- MCP
-  - good for agent tools that already speak MCP
-
-The project is built for two use cases:
-
-- desktop interoperability
-  - work against an existing local Zotero profile
-  - import, poll, and apply the currently supported subset of changes back to the local desktop database
-- headless/server runtime
-  - run `zotero-headless-daemon` on a machine without the Zotero GUI
-  - expose API and MCP for automation, retrieval, background sync jobs, and agent integrations
-
-## Status
-
-This project is still early-stage. The codebase already includes:
-
-- headless SQLite store plus change log
-- `zotero-headless` CLI
-- `zotero-headless-daemon` runtime
-- `zotero-headless-mcp` stdio server
-- local HTTP API
 - Zotero web sync for user and group libraries
-- local Zotero desktop import, polling, and narrow apply/writeback support
-- remote attachment upload/download for the currently supported stored-file and snapshot-style paths
-- Better BibTeX-oriented citekey compatibility
-- qmd export plus semantic search over Markdown derived from headless state, with automatic refresh on dataset changes
-- MCP setup helpers for common agent tools
-- runtime observability endpoints and background sync status
-- recovery snapshots, restore planning, restore execution, and backup replication targets
+- local Zotero desktop interoperability
+- qmd-backed semantic search that refreshes from library changes
+- built-in recovery snapshots, restore flows, and backup repositories
 
-Current upstream compatibility baseline:
+It is built for two main deployment shapes:
 
-- Zotero `9.0` (released April 10, 2026) is the newest tracked desktop/runtime baseline for local schema assumptions and the optional desktop-helper workflow
-- native citation-key fields introduced in Zotero 9 are now preserved on local desktop reads/writes and attempted on remote writes with automatic fallback for older API behavior
-- Zotero's new browser-based account login flow does not replace the Zotero Web API key required by `zotero-headless` for web sync
+- desktop interoperability: use an existing Zotero Desktop profile and optionally write supported changes back
+- true headless runtime: run the daemon on a machine without Zotero Desktop and expose API or MCP to clients
 
-## What It Is For
+## Quick Setup
 
-Typical end-user use cases:
-
-- run a headless Zotero-compatible service on a server
-- query or mutate libraries through CLI, API, or MCP
-- sync against Zotero web libraries without requiring the Zotero GUI to be running
-- work against a local desktop Zotero profile when local interoperability is needed
-- query library content through qmd-backed semantic search flows without manually rebuilding the qmd index after normal sync/write activity
-- create safety snapshots before risky operations and restore whole state or a single library after a bad change
-
-This repository also contains contribution and architecture material because the project is still evolving, but the repo is not meant only for contributors.
-
-## Desktop Helper Workflow
-
-This repository no longer vendors a Zotero source snapshot.
-
-The current architecture is a clean-room headless runtime with adapters around Zotero desktop and Zotero web sync. When contributors need to work on the optional desktop-helper path, the repo keeps only a small helper workflow under `desktop_helper/` rather than a full upstream source mirror.
-
-Understanding upstream desktop/runtime behavior still matters for:
-
-- local database interoperability
-- daemon/bootstrap experiments
-- sync semantics
-- attachment handling
-- reproducible debugging for contributors
-
-The intended workflow is:
-
-- pin an upstream Zotero commit or tag in `desktop_helper/metadata.json`
-- maintain the helper delta as explicit patch files under `desktop_helper/patches/`
-- build or validate against an external upstream checkout instead of an in-repo vendored tree
-
-## Repository Layout
-
-- `src/zotero_headless/`
-  - main runtime, CLI, API, MCP, sync, and adapter code
-- `tests/`
-  - regression coverage for the runtime, sync, adapter, and tooling surfaces
-- `docs/`
-  - branch guides and upstream Zotero notes
-- `desktop_helper/`
-  - metadata and patch workflow for the optional external Zotero desktop-helper path
-
-Local-only workspace material should go in ignored directories such as:
-
-- `.codex/`
-- `.agents/`
-- `.notes/`
-- `.tmp/`
-
-## Install
-
-Recommended install methods:
+### 1. Install the CLI
 
 ```text
 uv tool install zotero-headless
 ```
 
-or
+or:
 
 ```text
 pipx install zotero-headless
-```
-
-From source:
-
-```text
-git clone https://github.com/<owner>/zotero-headless.git
-cd zotero-headless
-PYTHONPATH=src python3 -m zotero_headless capabilities
 ```
 
 Main entrypoints:
@@ -147,371 +50,332 @@ zhl-daemon
 zhl-mcp
 ```
 
-## Quick Start
-
-Run the setup flow:
+### 2. Run guided setup
 
 ```text
 zhl setup start
 ```
 
-`setup start` tries autodiscovery first, uses standard local Zotero paths automatically when it finds them, and only prompts for values that are still missing.
+`setup start` tries autodiscovery first. On a normal desktop install it will usually find standard Zotero paths automatically, then prompt only for the missing pieces such as API credentials or remote-library selection.
 
-Interactive commands now default to human-readable output. If you want script-friendly payloads for setup, version, update, doctor, or daemon status commands, add `--json`.
+### 3. Pick the common path that matches your use case
 
-The CLI is now split by audience:
+#### Codex plugin
 
-- human/operator flows live on the main top-level commands like `setup`, `doctor`, `version`, and `daemon`
-- strict programmatic CLI usage lives under `zhl raw ...`
-
-Use `zhl raw ...` when you want non-interactive, automation-friendly command paths that mirror the underlying data operations closely.
-
-## Recovery
-
-`zotero-headless` now includes a built-in recovery subsystem for all library types.
-
-It snapshots the full headless runtime boundary:
-
-- canonical DB
-- mirror DB
-- cached files
-- qmd export output
-- citation export artifact
-
-You can inspect configured repositories:
+Best if you want the richest Codex integration, not just raw MCP wiring.
 
 ```text
-zhl recovery repositories
+zhl plugin install codex
 ```
 
-Create a snapshot:
+This installs the local Codex plugin bundle with:
+
+- bundled Zotero skills
+- bundled research and sync agents
+- bundled MCP config
+- a startup status hook
+
+#### Claude Code
+
+Use Claude Code's MCP config plus the matching skill pack.
 
 ```text
-zhl recovery snapshot-create --reason "before bulk edits"
+zhl setup add claude-code --scope project
+zhl skill install claude-code
 ```
 
-Plan a rollback for one library:
+#### OpenClaw
+
+Use OpenClaw's native plugin system plus the matching skill.
 
 ```text
-zhl recovery restore-plan --snapshot <snapshot_id> --library group:123
+zhl plugin install openclaw
+zhl skill install openclaw
 ```
 
-Execute a rollback:
+`zhl plugin install openclaw` runs the real OpenClaw plugin install and enable flow against `./plugins/openclaw-plugin-zotero`.
 
-```text
-zhl recovery restore-execute --snapshot <snapshot_id> --library group:123 --confirm
-```
+#### Codex or another client with plain MCP only
 
-Replicate a snapshot to an external repository:
-
-```text
-zhl recovery snapshot-push <snapshot_id> --repository s3-primary
-zhl recovery snapshot-push <snapshot_id> --repository lab-rsync
-```
-
-See [docs/RECOVERY.md](./docs/RECOVERY.md) for configuration and API details.
-
-Autodiscovery looks for:
-
-- standard Zotero data directories such as `~/Zotero`
-- common Zotero desktop binary locations
-- already-saved API credentials and remote-library selections
-
-Then the wizard will:
-
-- tell you when it autodiscovers a standard local Zotero setup, and only ask for local desktop paths when it cannot infer them or when you explicitly reconfigure them
-- use explicit confirmation prompts such as `[y/N]` and `[Y/n]` where a yes-or-no decision is needed
-- ask for your Zotero API key only when web sync is needed
-- discover your personal library and available group libraries
-- let you choose which remote libraries to configure
-- store a default remote library for later use
-
-That means it also works for:
-
-- a Linux server where this is the only Zotero-related install
-- rerunning setup later to add or remove group libraries
-- switching to a different Zotero account in true headless mode
-- changing local Zotero paths without redoing the whole setup
-
-You can inspect what autodiscovery sees without changing config:
-
-```text
-zhl config autodiscover
-```
-
-You can also reconfigure specific parts later:
-
-```text
-zhl setup account
-zhl setup libraries
-zhl setup local
-```
-
-### Example: Codex On A Desktop With Zotero Installed
-
-Use this when you already have Zotero Desktop on your machine and want `zotero-headless` to interoperate with that local profile, while also making MCP and skills available in Codex.
-
-1. Install the CLI:
-
-```text
-uv tool install zotero-headless
-```
-
-2. Run guided setup. On a standard desktop install, autodiscovery should usually find your Zotero data directory automatically:
-
-```text
-zhl setup start
-```
-
-3. Install the MCP server into Codex:
+If you want raw MCP config without the full Codex plugin bundle:
 
 ```text
 zhl setup add codex --scope user
 ```
 
-4. Install the Codex skill pack:
+Other supported setup targets include `cursor`, `claude-desktop`, `gemini`, `cline`, `antigravity`, and `windsurf`.
 
-```text
-zhl skill install codex
-```
+#### Headless daemon on a server
 
-5. Start using whichever interface fits the task:
-
-```text
-zhl local import
-zhl qmd query "papers about retrieval augmented generation"
-zhl api serve --host 127.0.0.1 --port 8787
-zhl-mcp
-```
-
-Typical result:
-
-- local Zotero desktop data is imported and can be polled/applied
-- Codex can connect through MCP
-- Codex can also call the HTTP API directly when that is the better fit
-- qmd-backed semantic search stays in sync automatically as headless data changes
-
-### Example: Standalone Headless Linux Server
-
-Use this when the machine does not run Zotero Desktop and `zotero-headless` is the only Zotero-related runtime on the box.
-
-1. Install the CLI:
-
-```text
-uv tool install zotero-headless
-```
-
-2. Run guided setup. Autodiscovery will likely find little on a clean server, so the wizard will prompt for your Zotero API key and remote libraries:
-
-```text
-zhl setup start
-```
-
-3. Start the daemon runtime with background sync:
+If this machine is the runtime host:
 
 ```text
 zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
 ```
 
-4. Use the API or MCP depending on the integration:
+### 4. Smoke-test the install
 
 ```text
-curl -s http://127.0.0.1:8787/capabilities
-zhl-mcp
+zhl capabilities
+zhl daemon status
+zhl setup list
 ```
 
-5. If you want Codex or another agent client to connect to that server-hosted install, add MCP setup and install the matching skill pack on the client machine:
+If you configured remote sync:
 
 ```text
-zhl setup add codex --scope user
-zhl skill install codex
+zhl raw sync discover
 ```
 
-Typical result:
+## Most Common Workflows
 
-- personal and group libraries sync from Zotero Web
-- the daemon hosts API, MCP, background sync, and semantic search workflows
-- agent clients can use either MCP or the HTTP API
-- no local Zotero GUI or desktop profile is required
-
-For non-interactive automation, you can still initialize configuration directly:
+### Search the library
 
 ```text
-python -m zotero_headless config init \
-  --data-dir "$HOME/Zotero" \
-  --api-key "$ZOTERO_API_KEY" \
-  --user-id 123456 \
-  --remote-library-id user:123456 \
-  --remote-library-id group:654321 \
-  --default-library-id user:123456
+zhl qmd query "papers about retrieval augmented generation"
 ```
 
-Run the daemon runtime:
+Use qmd-backed search for exploratory retrieval. Use exact MCP, API, or CLI reads for authoritative metadata.
+
+### Pull and push a remote library
 
 ```text
-zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300
+zhl raw sync pull --library user:123456
+zhl raw sync push --library user:123456
+zhl raw sync conflicts --library user:123456
 ```
 
-Run the API directly without the daemon wrapper:
+Always inspect conflicts before retrying a failed push.
+
+### Import from local Zotero Desktop
+
+```text
+zhl local import
+zhl local plan-apply --library local:1
+zhl local apply --library local:1
+```
+
+Use `plan-apply` before any local writeback.
+
+### Create a safety snapshot
+
+```text
+zhl recovery snapshot-create --reason "before bulk edits"
+zhl recovery restore-plan --snapshot <snapshot_id> --library group:123
+zhl recovery restore-execute --snapshot <snapshot_id> --library group:123 --confirm
+```
+
+## Which Interface To Use
+
+### CLI
+
+Use the CLI for:
+
+- operator workflows
+- shell scripts
+- setup and diagnostics
+- local administration
+
+Human-facing commands live on the main surface such as `setup`, `doctor`, `version`, and `daemon`.
+
+For strict machine-oriented automation, use:
+
+```text
+zhl raw ...
+```
+
+### HTTP API
+
+Use the API for:
+
+- app-to-app integration
+- long-running services
+- direct agent integrations without MCP
+- runtime observability and job inspection
+
+You can expose it with either:
 
 ```text
 zhl api serve --host 127.0.0.1 --port 8787
 ```
 
-Run the MCP server:
+or:
+
+```text
+zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300
+```
+
+### MCP
+
+Use MCP when your client already speaks MCP and you want native tool use inside:
+
+- Codex
+- Claude Code
+- Cursor
+- Gemini
+- Cline
+- Windsurf
+- similar agent tools
+
+Start the stdio MCP server directly with:
 
 ```text
 zhl-mcp
 ```
 
-Check version and update:
+## Typical Setup Recipes
+
+### Desktop machine with Zotero installed and Codex as the client
+
+```text
+uv tool install zotero-headless
+zhl setup start
+zhl plugin install codex
+```
+
+Useful next commands:
+
+```text
+zhl local import
+zhl qmd query "papers about transformers in NLP"
+```
+
+### Standalone headless server
+
+```text
+uv tool install zotero-headless
+zhl setup start
+zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
+```
+
+Useful next commands:
+
+```text
+curl -s http://127.0.0.1:8787/capabilities
+zhl raw sync discover
+```
+
+### Claude Code on a project
+
+```text
+uv tool install zotero-headless
+zhl setup start
+zhl setup add claude-code --scope project
+zhl skill install claude-code
+```
+
+### OpenClaw
+
+```text
+uv tool install zotero-headless
+zhl setup start
+zhl plugin install openclaw
+zhl skill install openclaw
+```
+
+## Command Cheat Sheet
+
+### Status and diagnostics
 
 ```text
 zhl version
-zhl update --check
-zhl update
-zhl --json doctor
+zhl doctor
+zhl capabilities
+zhl daemon status
+zhl setup list
 ```
 
-Release maintenance:
+### Client setup
 
 ```text
-make release VERSION=0.4.0
+zhl plugin install codex
+zhl plugin install openclaw
+zhl setup add codex --scope user
+zhl setup add claude-code --scope project
+zhl skill install codex
+zhl skill install claude-code
+zhl skill install openclaw
+zhl skill export claude-desktop
 ```
 
-API exposure works in two modes:
-
-- `zotero-headless api serve`
-  - standalone HTTP API process
-- `zotero-headless-daemon serve`
-  - daemon runtime that hosts the same HTTP API plus runtime state and background sync
-
-Strict machine-oriented CLI examples:
+### Local desktop interoperability
 
 ```text
-zhl raw sync discover
-zhl raw sync pull --library user:123456
-zhl raw item create user:123456 '{"itemType":"note","note":"Hello"}'
-zhl raw local import
+zhl local libraries
+zhl local import
+zhl local poll
+zhl local plan-apply --library local:1
+zhl local apply --library local:1
 ```
 
-So no, the API is not only exposed on `zotero-headless-daemon`.
-
-Inspect capabilities and daemon state:
+### Remote sync
 
 ```text
-zotero-headless capabilities
-zotero-headless daemon status
-zotero-headless doctor
+zhl sync discover
+zhl sync pull --library user:123456
+zhl sync push --library user:123456
+zhl sync conflicts --library user:123456
 ```
 
-## Choosing An Interface
-
-Use the CLI if you want:
-
-- terminal-first workflows
-- shell scripts
-- direct local administration
-
-Use the HTTP API if you want:
-
-- app-to-app integration
-- service orchestration
-- direct agent integrations without MCP
-- long-running daemon deployments
-
-Use MCP if you want:
-
-- native tool use inside MCP-capable agent clients
-- easy installation into Codex, Claude Code, Cursor, Gemini, Cline, Windsurf, and similar tools
-
-## Current Command Surface
-
-Local desktop interoperability:
+### Recovery
 
 ```text
-zotero-headless local libraries
-zotero-headless local import
-zotero-headless local poll
-zotero-headless local plan-apply --library local:1
-zotero-headless local apply --library local:1
+zhl recovery repositories
+zhl recovery snapshot-create --reason "before risky edit"
+zhl recovery restore-plan --snapshot <snapshot_id> --library user:123456
+zhl recovery restore-execute --snapshot <snapshot_id> --library user:123456 --confirm
 ```
 
-Remote sync:
+## Status
 
-```text
-zotero-headless sync discover
-zotero-headless sync pull --library user:123456
-zotero-headless sync push --library user:123456
-zotero-headless sync conflicts --library user:123456
-```
+This project is still early-stage, but it already includes:
 
-qmd flows:
+- a headless SQLite store and change log
+- the `zotero-headless` CLI
+- the `zotero-headless-daemon` runtime
+- the `zotero-headless-mcp` stdio server
+- a local HTTP API
+- Zotero web sync for user and group libraries
+- local Zotero desktop import, polling, and narrow apply support
+- remote attachment upload and download for the currently supported paths
+- Better BibTeX-oriented citekey compatibility
+- qmd export plus semantic search with automatic refresh
+- MCP setup helpers and plugin installers for common agent tools
+- runtime observability endpoints and background sync status
+- recovery snapshots, restore planning, restore execution, and backup replication
 
-```text
-zotero-headless qmd export
-zotero-headless qmd query "retrieval augmented generation"
-```
+Current compatibility baseline:
 
-MCP/client setup:
+- Zotero `9.0` (released April 10, 2026) is the newest tracked desktop/runtime baseline for local schema assumptions
+- Zotero 9 native citation-key fields are preserved on local reads and writes and attempted on remote writes with fallback behavior
+- Zotero's browser-based account login does not replace the Web API key requirement for remote sync
 
-```text
-zotero-headless setup list
-zotero-headless setup add codex --scope user
-zotero-headless setup add claude-code --scope project
-zotero-headless setup add claude-desktop --scope user
-zotero-headless setup add cursor --scope project
-zotero-headless setup add gemini --scope user
-zotero-headless setup add cline --scope user
-zotero-headless setup add antigravity --scope user
-zotero-headless setup add openclaw --scope user
-zotero-headless setup add windsurf --scope user
-```
+## Repository Layout
 
-Codex plugin bundle:
+- `src/zotero_headless/`: runtime, CLI, API, MCP, sync, and adapter code
+- `tests/`: regression coverage across runtime and tooling surfaces
+- `docs/`: deeper guides and architecture notes
+- `plugins/`: repo-local plugin bundles for supported agent clients
+- `desktop_helper/`: metadata and patch workflow for the optional external Zotero desktop-helper path
 
-```text
-zotero-headless plugin install codex
-zotero-headless plugin install openclaw
-```
+Local-only workspace material should live in ignored directories such as:
 
-Agent skill helpers:
+- `.codex/`
+- `.agents/`
+- `.notes/`
+- `.tmp/`
 
-```text
-zotero-headless skill add claude-desktop
-zotero-headless skill install codex
-zotero-headless skill install claude-code
-zotero-headless skill install gemini-cli
-zotero-headless skill install cline
-zotero-headless skill install antigravity
-zotero-headless skill install openclaw
-zotero-headless skill install opencode
-```
+## Desktop Helper Workflow
 
-`zotero-headless skill add claude-desktop` generates a Claude skill archive on your Desktop. Upload that archive in the Skills section of Claude Desktop or on claude.ai.
+This repository no longer vendors a Zotero source snapshot.
 
-OpenClaw plugin bundle:
+The current architecture is a clean-room headless runtime with adapters around Zotero Desktop and Zotero web sync. When contributors need the optional desktop-helper path, the repo keeps a small helper workflow under `desktop_helper/` rather than an in-repo upstream mirror.
 
-```text
-zotero-headless plugin install openclaw
-zotero-headless skill install openclaw
-```
+That workflow is intended to:
 
-`zotero-headless plugin install codex` copies the repo-local plugin bundle from `./plugins/zotero-headless-codex` into `~/plugins/zotero-headless-codex`, refreshes its bundled `.mcp.json` from your local settings, preserves the bundled Zotero skill pack, agents, and startup hook, and adds or updates the home-local marketplace entry at `~/.agents/plugins/marketplace.json`.
-
-`zotero-headless plugin install openclaw` runs the linked local plugin install and enable flow for `./plugins/openclaw-plugin-zotero` in this repo. OpenClaw loads shared local skills from `~/.openclaw/skills`, and the Zotero plugin reads its runtime config from `~/.openclaw/openclaw.json`.
-
-## Roadmap
-
-Implemented:
-
-- headless store and mutation log
-- runtime daemon, API, and MCP server
-- Zotero web sync for remote libraries
-- local desktop import and polling
-- narrow local writeback/apply support for the supported item, collection, note, annotation, and attachment paths
-- remote attachment handling for the currently supported stored-file and snapshot-style paths
-- Better BibTeX-oriented citekey handling
+- pin an upstream Zotero commit or tag in `desktop_helper/metadata.json`
+- keep helper deltas as explicit patch files under `desktop_helper/patches/`
+- build or validate against an external upstream checkout
 
 ## Documentation
 
@@ -521,6 +385,7 @@ Implemented:
 - [API_AND_MCP.md](./docs/API_AND_MCP.md)
 - [LOCAL_DESKTOP.md](./docs/LOCAL_DESKTOP.md)
 - [REMOTE_SYNC.md](./docs/REMOTE_SYNC.md)
+- [RECOVERY.md](./docs/RECOVERY.md)
 - [DESKTOP_HELPER.md](./docs/DESKTOP_HELPER.md)
 - [ZOTERO_SOURCE_NOTES.md](./docs/ZOTERO_SOURCE_NOTES.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)

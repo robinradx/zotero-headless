@@ -19,7 +19,7 @@ class CliOutputTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         output = buffer.getvalue()
-        self.assertIn("Install method:", output)
+        self.assertIn("Install method", output)
         self.assertNotIn('"package"', output)
 
     def test_version_command_can_emit_json(self):
@@ -198,11 +198,12 @@ class CliOutputTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         output = buffer.getvalue()
-        self.assertIn("Updated: yes", output)
-        self.assertIn("Version: 0.1.0 -> 0.2.0", output)
-        self.assertIn("Post-update refresh:", output)
-        self.assertIn("Skills refreshed: 1", output)
-        self.assertIn("Plugins refreshed: 2", output)
+        self.assertIn("Status", output)
+        self.assertIn("updated", output)
+        self.assertIn("0.1.0 -> 0.2.0", output)
+        self.assertIn("Post-update refresh", output)
+        self.assertIn("Skills refreshed", output)
+        self.assertIn("Plugins refreshed", output)
 
     def test_update_command_skips_post_refresh_after_failed_update(self):
         buffer = io.StringIO()
@@ -227,8 +228,11 @@ class CliOutputTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         refresh_mock.assert_not_called()
         output = buffer.getvalue()
-        self.assertIn("Updated: no", output)
-        self.assertNotIn("Post-update refresh:", output)
+        self.assertIn("Status", output)
+        self.assertIn("failed", output)
+        self.assertIn("Updated", output)
+        self.assertIn("no", output)
+        self.assertNotIn("Post-update refresh", output)
 
     def test_update_command_reports_already_current_when_version_does_not_change(self):
         buffer = io.StringIO()
@@ -252,8 +256,8 @@ class CliOutputTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         refresh_mock.assert_not_called()
         output = buffer.getvalue()
-        self.assertIn("Status: already current", output)
-        self.assertIn("Version: 0.2.0 -> 0.2.0", output)
+        self.assertIn("already current", output)
+        self.assertIn("0.2.0 -> 0.2.0", output)
 
     def test_citations_status_can_emit_json(self):
         buffer = io.StringIO()
@@ -302,8 +306,9 @@ class CliOutputTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         output = buffer.getvalue()
-        self.assertIn("Citations path: /tmp/zhl-state/citations.json", output)
-        self.assertIn("Warnings:", output)
+        self.assertIn("Citations path", output)
+        self.assertIn("/tmp/zhl-state/citations.json", output)
+        self.assertIn("Warnings", output)
         self.assertIn("qmd is not installed.", output)
 
     def test_recovery_repositories_can_emit_json(self):

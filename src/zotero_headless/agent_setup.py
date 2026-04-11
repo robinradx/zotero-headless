@@ -40,10 +40,16 @@ SUPPORTED_SKILL_TARGETS = (
     "claude-desktop",
     "gemini-cli",
 )
+BULK_PLUGIN_TARGETS = SUPPORTED_PLUGIN_TARGETS
+BULK_SKILL_TARGETS = tuple(target for target in SUPPORTED_SKILL_TARGETS if target != "claude-desktop")
 SUPPORTED_SKILL_VARIANTS = ("general", "daemon")
 USER_SCOPE_ONLY_TARGETS = {"codex", "claude-desktop", "gemini", "cline", "antigravity", "openclaw", "windsurf"}
 PROJECT_OR_USER_TARGETS = {"cursor"}
 PROJECT_ONLY_TARGETS = {"claude-code"}
+
+
+def _packaged_plugin_root() -> Path:
+    return Path(__file__).resolve().parent / "packaged_plugins"
 
 
 def _env_map(settings: Settings) -> dict[str, str]:
@@ -167,6 +173,7 @@ def _openclaw_plugin_candidates(*, cwd: Path | None = None) -> list[Path]:
         base / "plugins" / OPENCLAW_PLUGIN_DIRNAME,
         base / "openclaw-plugin-zotero",
         base / OPENCLAW_PLUGIN_DIRNAME,
+        _packaged_plugin_root() / OPENCLAW_PLUGIN_DIRNAME,
     ]
     seen: set[Path] = set()
     unique: list[Path] = []
@@ -270,7 +277,10 @@ def _install_openclaw_plugin(
 
 def _codex_plugin_source_path(*, cwd: Path | None = None) -> Path:
     base = (cwd or Path.cwd()).resolve()
-    return (base / "plugins" / CODEX_PLUGIN_NAME).resolve()
+    repo_path = (base / "plugins" / CODEX_PLUGIN_NAME).resolve()
+    if repo_path.exists():
+        return repo_path
+    return (_packaged_plugin_root() / CODEX_PLUGIN_NAME).resolve()
 
 
 def _codex_plugin_install_path(*, home: Path | None = None) -> Path:
@@ -280,7 +290,10 @@ def _codex_plugin_install_path(*, home: Path | None = None) -> Path:
 
 def _claude_code_plugin_source_path(*, cwd: Path | None = None) -> Path:
     base = (cwd or Path.cwd()).resolve()
-    return (base / "plugins" / CLAUDE_CODE_PLUGIN_NAME).resolve()
+    repo_path = (base / "plugins" / CLAUDE_CODE_PLUGIN_NAME).resolve()
+    if repo_path.exists():
+        return repo_path
+    return (_packaged_plugin_root() / CLAUDE_CODE_PLUGIN_NAME).resolve()
 
 
 def _claude_code_plugin_install_path(*, home: Path | None = None) -> Path:
@@ -606,6 +619,49 @@ def install_plugin(
     }
 
 
+def install_plugin_set(
+    target: str,
+    settings: Settings,
+    *,
+    cwd: Path | None = None,
+    home: Path | None = None,
+) -> list[dict[str, Any]]:
+    if target == "all":
+        targets = BULK_PLUGIN_TARGETS
+    elif target in SUPPORTED_PLUGIN_TARGETS:
+        targets = (target,)
+    else:
+        raise ValueError(f"Unsupported plugin target: {target}")
+    return [install_plugin(name, settings, cwd=cwd, home=home) for name in targets]
+
+
+def _plugin_source_exists(target: str, *, cwd: Path | None = None) -> bool:
+    if target == "codex":
+        return _codex_plugin_source_path(cwd=cwd).exists()
+    if target == "claude-code":
+        return _claude_code_plugin_source_path(cwd=cwd).exists()
+    if target == "openclaw":
+        return _openclaw_plugin_path(cwd=cwd).exists()
+    return False
+
+
+def installed_plugin_targets(
+    settings: Settings,
+    *,
+    cwd: Path | None = None,
+    home: Path | None = None,
+) -> list[str]:
+    targets: list[str] = []
+    if _codex_plugin_install_path(home=home).exists():
+        targets.append("codex")
+    if _claude_code_plugin_install_path(home=home).exists():
+        targets.append("claude-code")
+    openclaw_status = inspect_setup_target("openclaw", settings, cwd=cwd, home=home, scope="user")
+    if openclaw_status.get("installed"):
+        targets.append("openclaw")
+    return targets
+
+
 def _target_label(target: str) -> str:
     labels = {
         "codex": "Codex",
@@ -858,6 +914,61 @@ def install_skill(
         }
     _write_text(path, skill_text(target, variant=variant))
     return {"target": target, "variant": variant, "installed": True, "path": str(path)}
+
+
+def install_skill_set(
+    target: str,
+    *,
+    home: Path | None = None,
+    variant: str = "general",
+) -> list[dict[str, Any]]:
+    if target == "all":
+        targets = BULK_SKILL_TARGETS
+    elif target in SUPPORTED_SKILL_TARGETS:
+        targets = (target,)
+    else:
+        raise ValueError(f"Unsupported skill target: {target}")
+    return [install_skill(name, home=home, variant=variant) for name in targets]
+
+
+def installed_skill_targets(*, home: Path | None = None, variant: str = "general") -> list[str]:
+    return [
+        target
+        for target in BULK_SKILL_TARGETS
+        if skill_target_path(target, home=home, variant=variant).exists()
+    ]
+
+
+def refresh_installed_integrations(
+    settings: Settings,
+    *,
+    cwd: Path | None = None,
+    home: Path | None = None,
+    variant: str = "general",
+) -> dict[str, Any]:
+    refreshed_skills: list[dict[str, Any]] = []
+    refreshed_plugins: list[dict[str, Any]] = []
+    skipped_plugins: list[dict[str, Any]] = []
+
+    for target in installed_skill_targets(home=home, variant=variant):
+        refreshed_skills.append(install_skill(target, home=home, variant=variant))
+
+    for target in installed_plugin_targets(settings, cwd=cwd, home=home):
+        if not _plugin_source_exists(target, cwd=cwd):
+            skipped_plugins.append(
+                {
+                    "target": target,
+                    "reason": "plugin_source_not_found",
+                }
+            )
+            continue
+        refreshed_plugins.append(install_plugin(target, settings, cwd=cwd, home=home))
+
+    return {
+        "skills": refreshed_skills,
+        "plugins": refreshed_plugins,
+        "skipped_plugins": skipped_plugins,
+    }
 
 
 def export_skill(target: str, *, variant: str = "general") -> dict[str, Any]:

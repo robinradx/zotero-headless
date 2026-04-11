@@ -55,17 +55,30 @@ zhl skill install openclaw
 zhl skill export claude-desktop
 ```
 
+Package update helpers:
+
+```text
+zhl update --check
+zhl update
+```
+
+After a successful package update, `zhl update` automatically refreshes already-installed standalone skills and already-installed plugin targets using the packaged plugin bundles, while still preferring the local checkout when you are running from the repo.
+
 Install the repo-local Codex plugin bundle:
 
 ```text
 zhl plugin install codex
 zhl plugin install claude-code
 zhl plugin install openclaw
+zhl plugin update codex
+zhl plugin update claude-code
+zhl plugin update openclaw
+zhl plugin update all
 ```
 
-The Codex bundle includes the MCP config, a focused Zotero skill pack, research and sync agents, and a startup status hook. `zhl plugin install claude-code` installs the matching Claude Code plugin bundle and refreshes its bundled `.mcp.json` from your local settings.
+The Codex bundle includes the MCP config, a focused Zotero skill pack, research and sync agents, and a startup status hook. `zhl plugin install claude-code` installs the matching Claude Code plugin bundle and refreshes its bundled `.mcp.json` from your local settings. `zhl plugin update ...` refreshes an already installed plugin from the current repo-local source bundle, and `zhl plugin update all` refreshes all supported plugin targets at once.
 
-For OpenClaw's native integration, run `zhl plugin install openclaw`. That shells out to `openclaw plugins install -l ./plugins/openclaw-plugin-zotero` and then enables `zotero`.
+For OpenClaw's native integration, run `zhl plugin install openclaw`. That shells out to `openclaw plugins install -l ./plugins/openclaw-plugin-zotero` and then enables `zotero`. The linked plugin source uses a package-manager-agnostic `prepare` build hook so installs work with OpenClaw's `npm`, `pnpm`, or `bun` setting.
 
 ## Local Desktop Commands
 

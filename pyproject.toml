@@ -33,5 +33,11 @@ zhl-mcp = "zotero_headless.mcp:main"
 [tool.setuptools]
 package-dir = { "" = "src" }
 
+[tool.setuptools.package-data]
+zotero_headless = [
+  "packaged_plugins/**/*",
+  "packaged_plugins/**/.*",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,0 +1,51 @@
+{
+  "id": "zotero",
+  "name": "Zotero",
+  "description": "Zotero library access via zotero-headless daemon",
+  "configSchema": {
+    "daemon": {
+      "type": "object",
+      "properties": {
+        "host": { "type": "string", "default": "localhost" },
+        "port": { "type": "number", "default": 8787 },
+        "autoStart": { "type": "boolean", "default": true },
+        "syncOnStartup": { "type": "boolean", "default": true }
+      }
+    },
+    "cli": {
+      "type": "object",
+      "properties": {
+        "binary": { "type": "string", "default": "zhl" }
+      }
+    },
+    "libraries": {
+      "type": "object",
+      "description": "Per-library permission overrides keyed by library ID (e.g. user:123456)",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "read":        { "type": "boolean", "default": true },
+          "add":         { "type": "boolean", "default": true },
+          "write":       { "type": "boolean", "default": false },
+          "sync":        { "type": "boolean", "default": false },
+          "attachments": { "type": "boolean", "default": false },
+          "export":      { "type": "boolean", "default": true },
+          "backup":      { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "defaultPermissions": {
+      "type": "object",
+      "properties": {
+        "read":        { "type": "boolean", "default": true },
+        "add":         { "type": "boolean", "default": true },
+        "write":       { "type": "boolean", "default": false },
+        "sync":        { "type": "boolean", "default": false },
+        "attachments": { "type": "boolean", "default": false },
+        "export":      { "type": "boolean", "default": true },
+        "backup":      { "type": "boolean", "default": false }
+      }
+    }
+  },
+  "kind": "capability"
+}

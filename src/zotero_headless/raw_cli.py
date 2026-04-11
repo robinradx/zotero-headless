@@ -12,10 +12,11 @@ from .agent_setup import (
     SUPPORTED_SKILL_VARIANTS,
     export_skill,
     doctor_report,
-    install_plugin,
+    install_plugin_set,
     install_mcp_setup,
-    install_skill,
+    install_skill_set,
     inspect_setup_target,
+    refresh_installed_integrations,
     remove_mcp_setup,
     setup_list,
 )
@@ -30,6 +31,7 @@ from .cli_ui import (
     render_daemon_status,
     render_doctor_report,
     render_install_result,
+    render_text_list,
     render_setup_list,
     render_setup_result,
     render_setup_target,
@@ -62,6 +64,16 @@ def _emit(payload, *, as_json: bool = False, renderer=None) -> None:
         print(renderer(payload))
         return
     _print(payload)
+
+
+def _render_install_results(entries: list[dict[str, object]], *, heading: str) -> str:
+    blocks = [render_install_result(entry, heading=heading) for entry in entries]
+    lines: list[str] = []
+    for index, block in enumerate(blocks):
+        if index:
+            lines.append("")
+        lines.extend(block.splitlines())
+    return render_text_list(lines)
 
 
 def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None, discovered_libraries=None, selected_remote_libraries=None) -> dict[str, object]:
@@ -297,13 +309,13 @@ def build_parser() -> argparse.ArgumentParser:
     skill = sub.add_parser("skill")
     skill_sub = skill.add_subparsers(dest="skill_command", required=True)
     skill_add = skill_sub.add_parser("add")
-    skill_add.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_add.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS) + ["all"])
     skill_add.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_install = skill_sub.add_parser("install")
-    skill_install.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_install.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS) + ["all"])
     skill_install.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_update = skill_sub.add_parser("update")
-    skill_update.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
+    skill_update.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS) + ["all"])
     skill_update.add_argument("--variant", choices=list(SUPPORTED_SKILL_VARIANTS), default="general")
     skill_export = skill_sub.add_parser("export")
     skill_export.add_argument("tool", choices=list(SUPPORTED_SKILL_TARGETS))
@@ -312,7 +324,9 @@ def build_parser() -> argparse.ArgumentParser:
     plugin = sub.add_parser("plugin")
     plugin_sub = plugin.add_subparsers(dest="plugin_command", required=True)
     plugin_install = plugin_sub.add_parser("install")
-    plugin_install.add_argument("tool", choices=list(SUPPORTED_PLUGIN_TARGETS))
+    plugin_install.add_argument("tool", choices=list(SUPPORTED_PLUGIN_TARGETS) + ["all"])
+    plugin_update = plugin_sub.add_parser("update")
+    plugin_update.add_argument("tool", choices=list(SUPPORTED_PLUGIN_TARGETS) + ["all"])
 
     sub.add_parser("doctor")
 
@@ -413,7 +427,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.check:
             _emit({"plan": plan.to_dict()}, as_json=args.json, renderer=render_update_plan)
             return 0
-        _emit(run_update(plan), as_json=args.json, renderer=render_update_result)
+        payload = run_update(plan)
+        if payload.get("updated"):
+            payload["post_update"] = refresh_installed_integrations(load_settings(ensure_dirs=False), cwd=cwd)
+        _emit(payload, as_json=args.json, renderer=render_update_result)
         return 0
 
     if command == "setup":
@@ -468,10 +485,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if command == "skill":
         if args.skill_command in {"add", "install", "update"}:
+            payload = install_skill_set(args.tool, variant=args.variant)
             _emit(
-                install_skill(args.tool, variant=args.variant),
+                payload if args.tool == "all" else payload[0],
                 as_json=args.json,
-                renderer=lambda payload: render_install_result(payload, heading="Skill installed"),
+                renderer=(
+                    lambda payload: _render_install_results(payload, heading="Skill installed")
+                    if args.tool == "all"
+                    else render_install_result(payload, heading="Skill installed")
+                ),
             )
             return 0
         if args.skill_command == "export":
@@ -479,12 +501,23 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if command == "plugin":
-        if args.plugin_command == "install":
+        if args.plugin_command in {"install", "update"}:
             settings = load_settings(ensure_dirs=False)
+            payload = install_plugin_set(args.tool, settings, cwd=cwd)
             _emit(
-                install_plugin(args.tool, settings, cwd=cwd),
+                payload if args.tool == "all" else payload[0],
                 as_json=args.json,
-                renderer=lambda payload: render_install_result(payload, heading="Plugin installed"),
+                renderer=(
+                    lambda payload: _render_install_results(
+                        payload,
+                        heading="Plugin updated" if args.plugin_command == "update" else "Plugin installed",
+                    )
+                    if args.tool == "all"
+                    else render_install_result(
+                        payload,
+                        heading="Plugin updated" if args.plugin_command == "update" else "Plugin installed",
+                    )
+                ),
             )
             return 0
 

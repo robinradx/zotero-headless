@@ -7,14 +7,20 @@ from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from zotero_headless.agent_setup import (
+    BULK_SKILL_TARGETS,
     CLAUDE_CODE_PLUGIN_NAME,
     CODEX_PLUGIN_NAME,
     SERVER_NAME,
     doctor_report,
     export_skill,
+    refresh_installed_integrations,
     install_mcp_setup,
     install_plugin,
+    install_plugin_set,
     install_skill,
+    install_skill_set,
+    installed_plugin_targets,
+    installed_skill_targets,
     remove_mcp_setup,
     skill_target_path,
     setup_list,
@@ -157,6 +163,112 @@ class AgentSetupTests(unittest.TestCase):
             self.assertEqual(Path(result["config"]["plugin_path"]).resolve(), plugin_dir.resolve())
             self.assertEqual(run_mock.call_args_list[0].args[0], ["/usr/local/bin/openclaw", "plugins", "install", "-l", str(plugin_dir.resolve())])
             self.assertEqual(run_mock.call_args_list[1].args[0], ["/usr/local/bin/openclaw", "plugins", "enable", "zotero"])
+
+    def test_install_skill_set_for_all_skips_claude_desktop_archive_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+
+            result = install_skill_set("all", home=home)
+
+            targets = {entry["target"] for entry in result}
+            self.assertEqual(targets, set(BULK_SKILL_TARGETS))
+            self.assertNotIn("claude-desktop", targets)
+
+    def test_install_plugin_set_for_all_installs_all_supported_plugins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+
+            codex = cwd / "plugins" / CODEX_PLUGIN_NAME
+            (codex / ".codex-plugin").mkdir(parents=True, exist_ok=True)
+            (codex / ".codex-plugin" / "plugin.json").write_text('{"name":"zotero-headless-codex"}\n', encoding="utf-8")
+            (codex / ".mcp.json").write_text('{"mcpServers":{}}\n', encoding="utf-8")
+
+            claude = cwd / "plugins" / CLAUDE_CODE_PLUGIN_NAME
+            (claude / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+            (claude / ".claude-plugin" / "plugin.json").write_text('{"name":"zotero-headless"}\n', encoding="utf-8")
+            (claude / ".mcp.json").write_text('{"mcpServers":{}}\n', encoding="utf-8")
+
+            openclaw = cwd / "plugins" / "openclaw-plugin-zotero"
+            openclaw.mkdir(parents=True, exist_ok=True)
+            (openclaw / "openclaw.plugin.json").write_text("{}", encoding="utf-8")
+
+            with patch("zotero_headless.agent_setup.subprocess.run") as run_mock, patch(
+                "zotero_headless.agent_setup.shutil.which",
+                return_value="/usr/local/bin/openclaw",
+            ):
+                run_mock.side_effect = [
+                    CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
+                    CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
+                ]
+
+                result = install_plugin_set("all", Settings(), cwd=cwd, home=home)
+
+            self.assertEqual({entry["target"] for entry in result}, {"codex", "claude-code", "openclaw"})
+
+    def test_openclaw_plugin_package_has_prepare_script_for_source_installs(self):
+        package_json = Path(__file__).resolve().parents[1] / "plugins" / "openclaw-plugin-zotero" / "package.json"
+        payload = json.loads(package_json.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["scripts"]["prepare"], "tsc")
+
+    @patch("zotero_headless.agent_setup.subprocess.run")
+    @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
+    def test_installed_plugin_targets_reports_present_targets(self, _which, run_mock):
+        run_mock.return_value = CompletedProcess(args=["openclaw"], returncode=0, stdout='{"id":"zotero"}', stderr="")
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+            (home / "plugins" / CODEX_PLUGIN_NAME).mkdir(parents=True, exist_ok=True)
+            (home / ".claude" / "plugins" / CLAUDE_CODE_PLUGIN_NAME).mkdir(parents=True, exist_ok=True)
+
+            targets = installed_plugin_targets(Settings(), cwd=cwd, home=home)
+
+            self.assertEqual(targets, ["codex", "claude-code", "openclaw"])
+
+    def test_installed_skill_targets_reports_existing_in_place_skills(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            codex = skill_target_path("codex", home=home)
+            openclaw = skill_target_path("openclaw", home=home)
+            codex.parent.mkdir(parents=True, exist_ok=True)
+            openclaw.parent.mkdir(parents=True, exist_ok=True)
+            codex.write_text("x", encoding="utf-8")
+            openclaw.write_text("x", encoding="utf-8")
+
+            targets = installed_skill_targets(home=home)
+
+            self.assertEqual(targets, ["openclaw", "codex"])
+
+    @patch("zotero_headless.agent_setup.subprocess.run")
+    @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
+    def test_refresh_installed_integrations_updates_installed_targets_with_packaged_plugin_fallback(self, _which, run_mock):
+        run_mock.side_effect = [
+            CompletedProcess(args=["openclaw"], returncode=0, stdout='{"id":"zotero"}', stderr=""),
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
+            CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            cwd = Path(tmp) / "repo"
+
+            codex_skill = skill_target_path("codex", home=home)
+            codex_skill.parent.mkdir(parents=True, exist_ok=True)
+            codex_skill.write_text("old", encoding="utf-8")
+
+            (home / "plugins" / CODEX_PLUGIN_NAME).mkdir(parents=True, exist_ok=True)
+            (home / ".claude" / "plugins" / CLAUDE_CODE_PLUGIN_NAME).mkdir(parents=True, exist_ok=True)
+
+            codex_source = cwd / "plugins" / CODEX_PLUGIN_NAME
+            (codex_source / ".codex-plugin").mkdir(parents=True, exist_ok=True)
+            (codex_source / ".codex-plugin" / "plugin.json").write_text('{"name":"zotero-headless-codex"}\n', encoding="utf-8")
+            (codex_source / ".mcp.json").write_text('{"mcpServers":{}}\n', encoding="utf-8")
+
+            refreshed = refresh_installed_integrations(Settings(), cwd=cwd, home=home)
+
+            self.assertEqual([entry["target"] for entry in refreshed["skills"]], ["codex"])
+            self.assertEqual([entry["target"] for entry in refreshed["plugins"]], ["codex", "claude-code", "openclaw"])
+            self.assertEqual(refreshed["skipped_plugins"], [])
 
     def test_install_windsurf_setup_writes_user_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -301,7 +413,7 @@ class AgentSetupTests(unittest.TestCase):
             skill_path = destination / "skills" / SERVER_NAME / "SKILL.md"
             self.assertTrue(skill_path.exists())
 
-    def test_install_plugin_for_claude_code_returns_error_when_source_missing(self):
+    def test_install_plugin_for_claude_code_uses_packaged_source_when_repo_source_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "home"
             cwd = Path(tmp) / "repo"
@@ -309,8 +421,10 @@ class AgentSetupTests(unittest.TestCase):
 
             result = install_plugin("claude-code", Settings(), cwd=cwd, home=home)
 
-            self.assertFalse(result["installed"])
-            self.assertEqual(result["reason"], "plugin_source_not_found")
+            destination = home / ".claude" / "plugins" / CLAUDE_CODE_PLUGIN_NAME
+            self.assertTrue(result["installed"])
+            self.assertEqual(Path(result["path"]).resolve(), destination.resolve())
+            self.assertTrue((destination / ".claude-plugin" / "plugin.json").exists())
 
     def test_install_skill_for_openclaw_writes_skill_file_in_openclaw_home(self):
         with tempfile.TemporaryDirectory() as tmp:

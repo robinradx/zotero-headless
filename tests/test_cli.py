@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from zotero_headless.cli import main
 from zotero_headless.config import Settings
+from zotero_headless.installer_update import UpdatePlan
 
 
 class CliOutputTests(unittest.TestCase):
@@ -62,8 +63,8 @@ class CliOutputTests(unittest.TestCase):
             "instructions": ["Restart Codex if needed."],
         }
         with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
-            "zotero_headless.cli.install_plugin",
-            return_value=fake_result,
+            "zotero_headless.cli.install_plugin_set",
+            return_value=[fake_result],
         ), redirect_stdout(buffer):
             exit_code = main(["plugin", "install", "codex"])
 
@@ -82,8 +83,8 @@ class CliOutputTests(unittest.TestCase):
             "instructions": ["Inspect the plugin with openclaw plugins inspect zotero."],
         }
         with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
-            "zotero_headless.cli.install_plugin",
-            return_value=fake_result,
+            "zotero_headless.cli.install_plugin_set",
+            return_value=[fake_result],
         ), redirect_stdout(buffer):
             exit_code = main(["plugin", "install", "openclaw"])
 
@@ -102,8 +103,8 @@ class CliOutputTests(unittest.TestCase):
             "instructions": ["Restart Claude Code if needed."],
         }
         with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
-            "zotero_headless.cli.install_plugin",
-            return_value=fake_result,
+            "zotero_headless.cli.install_plugin_set",
+            return_value=[fake_result],
         ), redirect_stdout(buffer):
             exit_code = main(["plugin", "install", "claude-code"])
 
@@ -112,6 +113,102 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("Plugin installed", output)
         self.assertIn("claude-code", output)
         self.assertIn("/tmp/home/.claude/plugins/zotero-headless-claude-code", output)
+
+    def test_plugin_update_uses_human_output_by_default(self):
+        buffer = io.StringIO()
+        fake_result = {
+            "target": "codex",
+            "installed": True,
+            "path": "/tmp/home/plugins/zotero-headless-codex",
+            "instructions": ["Restart Codex if needed."],
+        }
+        with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
+            "zotero_headless.cli.install_plugin_set",
+            return_value=[fake_result],
+        ), redirect_stdout(buffer):
+            exit_code = main(["plugin", "update", "codex"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Plugin updated", output)
+        self.assertIn("codex", output)
+        self.assertIn("/tmp/home/plugins/zotero-headless-codex", output)
+
+    def test_plugin_update_all_uses_human_output_by_default(self):
+        buffer = io.StringIO()
+        fake_results = [
+            {"target": "codex", "installed": True, "path": "/tmp/home/plugins/zotero-headless-codex"},
+            {"target": "claude-code", "installed": True, "path": "/tmp/home/.claude/plugins/zotero-headless-claude-code"},
+            {"target": "openclaw", "installed": True, "path": "/tmp/home/.openclaw/openclaw.json"},
+        ]
+        with patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
+            "zotero_headless.cli.install_plugin_set",
+            return_value=fake_results,
+        ), redirect_stdout(buffer):
+            exit_code = main(["plugin", "update", "all"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Plugin updated", output)
+        self.assertIn("codex", output)
+        self.assertIn("claude-code", output)
+        self.assertIn("openclaw", output)
+
+    def test_skill_update_all_uses_human_output_by_default(self):
+        buffer = io.StringIO()
+        fake_results = [
+            {"target": "codex", "variant": "general", "installed": True, "path": "/tmp/home/.codex/skills/zotero-headless/SKILL.md"},
+            {"target": "claude-code", "variant": "general", "installed": True, "path": "/tmp/home/.claude/skills/zotero-headless/SKILL.md"},
+        ]
+        with patch("zotero_headless.cli.install_skill_set", return_value=fake_results), redirect_stdout(buffer):
+            exit_code = main(["skill", "update", "all"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Skill installed", output)
+        self.assertIn("codex", output)
+        self.assertIn("claude-code", output)
+
+    def test_update_command_refreshes_installed_integrations_after_success(self):
+        buffer = io.StringIO()
+        plan = UpdatePlan(method="uv-tool", command=["uv", "tool", "upgrade", "zotero-headless"], auto_supported=True, reason="test")
+        update_result = {"updated": True, "plan": plan.to_dict(), "stdout": "", "stderr": ""}
+        refresh_result = {
+            "skills": [{"target": "codex"}],
+            "plugins": [{"target": "claude-code"}, {"target": "openclaw"}],
+            "skipped_plugins": [],
+        }
+        with patch("zotero_headless.cli.build_update_plan", return_value=plan), patch(
+            "zotero_headless.cli.run_update",
+            return_value=update_result,
+        ), patch("zotero_headless.cli.load_settings", return_value=Settings()), patch(
+            "zotero_headless.cli.refresh_installed_integrations",
+            return_value=refresh_result,
+        ), redirect_stdout(buffer):
+            exit_code = main(["update"])
+
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Updated: yes", output)
+        self.assertIn("Post-update refresh:", output)
+        self.assertIn("Skills refreshed: 1", output)
+        self.assertIn("Plugins refreshed: 2", output)
+
+    def test_update_command_skips_post_refresh_after_failed_update(self):
+        buffer = io.StringIO()
+        plan = UpdatePlan(method="uv-tool", command=["uv", "tool", "upgrade", "zotero-headless"], auto_supported=True, reason="test")
+        update_result = {"updated": False, "plan": plan.to_dict(), "stdout": "", "stderr": "", "message": "failed"}
+        with patch("zotero_headless.cli.build_update_plan", return_value=plan), patch(
+            "zotero_headless.cli.run_update",
+            return_value=update_result,
+        ), patch("zotero_headless.cli.refresh_installed_integrations") as refresh_mock, redirect_stdout(buffer):
+            exit_code = main(["update"])
+
+        self.assertEqual(exit_code, 0)
+        refresh_mock.assert_not_called()
+        output = buffer.getvalue()
+        self.assertIn("Updated: no", output)
+        self.assertNotIn("Post-update refresh:", output)
 
     def test_citations_status_can_emit_json(self):
         buffer = io.StringIO()

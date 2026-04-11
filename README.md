@@ -66,6 +66,8 @@ Best if you want the richest Codex integration, not just raw MCP wiring.
 
 ```text
 zhl plugin install codex
+zhl plugin update codex
+zhl plugin update all
 ```
 
 This installs the local Codex plugin bundle with:
@@ -81,6 +83,8 @@ Use the Claude Code plugin bundle.
 
 ```text
 zhl plugin install claude-code
+zhl plugin update claude-code
+zhl plugin update all
 ```
 
 This installs the repo-local Claude Code plugin bundle and refreshes its bundled `.mcp.json` from your local settings.
@@ -91,10 +95,14 @@ Use OpenClaw's native plugin system plus the matching skill.
 
 ```text
 zhl plugin install openclaw
+zhl plugin update openclaw
+zhl plugin update all
 zhl skill install openclaw
 ```
 
 `zhl plugin install openclaw` runs the real OpenClaw plugin install and enable flow against `./plugins/openclaw-plugin-zotero`.
+`zhl plugin update ...` refreshes the installed plugin from the repo-local source bundle for the matching client. `zhl plugin update all` refreshes Codex, Claude Code, and OpenClaw in one pass.
+The OpenClaw plugin source now builds through a package-manager-agnostic `prepare` lifecycle script, so linked installs work whether OpenClaw is configured to use `npm`, `pnpm`, or `bun`.
 
 #### Codex or another client with plain MCP only
 
@@ -279,11 +287,15 @@ zhl skill install openclaw
 
 ```text
 zhl version
+zhl update --check
+zhl update
 zhl doctor
 zhl capabilities
 zhl daemon status
 zhl setup list
 ```
+
+After a successful `zhl update`, `zotero-headless` automatically refreshes already-installed standalone skills and already-installed plugin targets using the packaged plugin bundles, with the current checkout used as an override when you are running from the repo.
 
 ### Client setup
 
@@ -291,10 +303,15 @@ zhl setup list
 zhl plugin install codex
 zhl plugin install claude-code
 zhl plugin install openclaw
+zhl plugin update codex
+zhl plugin update claude-code
+zhl plugin update openclaw
+zhl plugin update all
 zhl setup add codex --scope user
 zhl skill install codex
 zhl skill install openclaw
 zhl skill export claude-desktop
+zhl skill update all
 ```
 
 ### Local desktop interoperability

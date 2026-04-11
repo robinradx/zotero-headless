@@ -1,0 +1,4 @@
+interface:
+  display_name: "Zotero Headless"
+  short_description: "Use Zotero libraries from Codex"
+  default_prompt: "Use zotero-headless to inspect, search, sync, and manage the user's Zotero libraries."

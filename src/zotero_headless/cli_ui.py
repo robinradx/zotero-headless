@@ -191,6 +191,18 @@ def render_update_result(payload: dict[str, Any]) -> str:
     if stderr:
         lines.append("Stderr:")
         lines.extend(f"  {line}" for line in stderr.splitlines())
+    post_update = payload.get("post_update") or {}
+    if post_update:
+        skills = post_update.get("skills") or []
+        plugins = post_update.get("plugins") or []
+        skipped = post_update.get("skipped_plugins") or []
+        lines.append("Post-update refresh:")
+        lines.append(f"  Skills refreshed: {len(skills)}")
+        lines.append(f"  Plugins refreshed: {len(plugins)}")
+        if skipped:
+            lines.append(f"  Plugins skipped: {len(skipped)}")
+            for entry in skipped:
+                lines.append(f"    - {entry.get('target')}: {entry.get('reason')}")
     return "\n".join(lines)
 
 

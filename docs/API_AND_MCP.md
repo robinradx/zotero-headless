@@ -62,6 +62,10 @@ To install the repo-local Codex plugin bundle:
 zhl plugin install codex
 zhl plugin install claude-code
 zhl plugin install openclaw
+zhl plugin update codex
+zhl plugin update claude-code
+zhl plugin update openclaw
+zhl plugin update all
 ```
 
 This copies `./plugins/zotero-headless-codex` into `~/plugins/zotero-headless-codex`, rewrites its bundled `.mcp.json` from your current local settings, preserves the bundled Zotero skill pack, agents, and startup hook, and adds or updates the home-local marketplace entry at `~/.agents/plugins/marketplace.json`.
@@ -75,7 +79,8 @@ zhl plugin install openclaw
 zhl skill install openclaw
 ```
 
-`zhl plugin install openclaw` shells out to the OpenClaw CLI and installs the linked local plugin from `./plugins/openclaw-plugin-zotero`, then enables `zotero`.
+`zhl plugin install openclaw` shells out to the OpenClaw CLI and installs the linked local plugin from `./plugins/openclaw-plugin-zotero`, then enables `zotero`. The source plugin now builds via a manager-agnostic `prepare` script so OpenClaw installs work whether its preferred node package manager is `npm`, `pnpm`, or `bun`.
+`zhl plugin update ...` re-runs the same repo-local refresh flow for the selected client, and `zhl plugin update all` refreshes all supported plugin targets in one command.
 
 To inspect what was written:
 
@@ -92,9 +97,10 @@ zhl skill install codex
 zhl skill install claude-code
 zhl skill install gemini-cli
 zhl skill install openclaw
+zhl skill update all
 ```
 
-This is separate from plain MCP setup. The Codex and Claude Code plugin bundles already ship with their own plugin-local skills; `zhl skill install ...` remains useful for clients that consume standalone skills directly.
+This is separate from plain MCP setup. The Codex and Claude Code plugin bundles already ship with their own plugin-local skills; `zhl skill install ...` remains useful for clients that consume standalone skills directly. `zhl skill update all` refreshes the standalone in-place skill targets in one pass and skips the manual-upload `claude-desktop` archive target.
 
 ## Choosing Between Them
 

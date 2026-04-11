@@ -19,10 +19,11 @@ from .agent_setup import (
     SUPPORTED_SKILL_VARIANTS,
     doctor_report,
     export_skill,
-    install_plugin,
+    install_plugin_set,
     inspect_setup_target,
     install_mcp_setup,
-    install_skill,
+    install_skill_set,
+    refresh_installed_integrations,
     remove_mcp_setup,
     setup_list,
 )
@@ -37,6 +38,7 @@ from .cli_ui import (
     render_daemon_status,
     render_doctor_report,
     render_install_result,
+    render_text_list,
     render_setup_result,
     render_setup_target,
     render_update_plan,
@@ -111,6 +113,16 @@ def _emit(ctx: typer.Context, payload, *, renderer=None, title: str | None = Non
         console.print(Panel.fit(content, title=title))
     else:
         console.print(content)
+
+
+def _render_install_results(entries: list[dict[str, object]], *, heading: str) -> str:
+    blocks = [render_install_result(entry, heading=heading) for entry in entries]
+    lines: list[str] = []
+    for index, block in enumerate(blocks):
+        if index:
+            lines.append("")
+        lines.extend(block.splitlines())
+    return render_text_list(lines)
 
 
 def _human_settings(*, ensure_dirs: bool = True) -> Settings:
@@ -192,7 +204,10 @@ def update_command(
     if check:
         _emit(ctx, {"plan": plan.to_dict()}, renderer=render_update_plan, title="Update")
         return
-    _emit(ctx, run_update(plan), renderer=render_update_result, title="Update")
+    payload = run_update(plan)
+    if payload.get("updated"):
+        payload["post_update"] = refresh_installed_integrations(_human_settings(ensure_dirs=False), cwd=Path.cwd())
+    _emit(ctx, payload, renderer=render_update_result, title="Update")
 
 
 @app.command("doctor")
@@ -348,8 +363,13 @@ def skill_install_command(
     tool: str = typer.Argument(..., help="Skill target client."),
     variant: str = typer.Option("general", "--variant", help="Skill variant."),
 ) -> None:
-    payload = install_skill(tool, variant=variant)
-    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="Skill installed"), title="Skill")
+    if tool != "all" and tool not in SUPPORTED_SKILL_TARGETS:
+        raise typer.BadParameter(f"Unsupported skill target: {tool}")
+    payload = install_skill_set(tool, variant=variant)
+    if tool == "all":
+        _emit(ctx, payload, renderer=lambda entries: _render_install_results(entries, heading="Skill installed"), title="Skill")
+        return
+    _emit(ctx, payload[0], renderer=lambda entry: render_install_result(entry, heading="Skill installed"), title="Skill")
 
 
 @skill_app.command("export")
@@ -362,15 +382,30 @@ def skill_export_command(
     _emit(ctx, payload, title="Skill export")
 
 
+def _run_plugin_command(ctx: typer.Context, tool: str, *, heading: str) -> None:
+    if tool != "all" and tool not in SUPPORTED_PLUGIN_TARGETS:
+        raise typer.BadParameter(f"Unsupported plugin target: {tool}")
+    payload = install_plugin_set(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd())
+    if tool == "all":
+        _emit(ctx, payload, renderer=lambda entries: _render_install_results(entries, heading=heading), title="Plugin")
+        return
+    _emit(ctx, payload[0], renderer=lambda entry: render_install_result(entry, heading=heading), title="Plugin")
+
+
 @plugin_app.command("install")
 def plugin_install_command(
     ctx: typer.Context,
     tool: str = typer.Argument(..., help="Plugin target client."),
 ) -> None:
-    if tool not in SUPPORTED_PLUGIN_TARGETS:
-        raise typer.BadParameter(f"Unsupported plugin target: {tool}")
-    payload = install_plugin(tool, _human_settings(ensure_dirs=False), cwd=Path.cwd())
-    _emit(ctx, payload, renderer=lambda entry: render_install_result(entry, heading="Plugin installed"), title="Plugin")
+    _run_plugin_command(ctx, tool, heading="Plugin installed")
+
+
+@plugin_app.command("update")
+def plugin_update_command(
+    ctx: typer.Context,
+    tool: str = typer.Argument(..., help="Plugin target client."),
+) -> None:
+    _run_plugin_command(ctx, tool, heading="Plugin updated")
 
 
 @daemon_app.command("status")

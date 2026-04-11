@@ -108,7 +108,11 @@ class AgentSetupTests(unittest.TestCase):
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
-    def test_install_openclaw_setup_runs_plugin_install_and_enable(self, _which, run_mock):
+    @patch(
+        "zotero_headless.agent_setup._ensure_runtime_daemon",
+        return_value={"running": True, "started": False, "message": "zotero-headless daemon already running"},
+    )
+    def test_install_openclaw_setup_runs_plugin_install_and_enable(self, _daemon, _which, run_mock):
         run_mock.side_effect = [
             CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
             CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
@@ -133,7 +137,11 @@ class AgentSetupTests(unittest.TestCase):
             self.assertEqual(run_mock.call_args_list[1].args[0], ["/usr/local/bin/openclaw", "plugins", "enable", "zotero"])
 
     @patch("zotero_headless.agent_setup.shutil.which", return_value=None)
-    def test_install_openclaw_setup_returns_instructions_when_cli_missing(self, _which):
+    @patch(
+        "zotero_headless.agent_setup._ensure_runtime_daemon",
+        return_value={"running": True, "started": False, "message": "zotero-headless daemon already running"},
+    )
+    def test_install_openclaw_setup_returns_instructions_when_cli_missing(self, _daemon, _which):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             cwd = home / "project"
@@ -150,7 +158,11 @@ class AgentSetupTests(unittest.TestCase):
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
-    def test_install_plugin_for_openclaw_runs_plugin_install_and_enable(self, _which, run_mock):
+    @patch(
+        "zotero_headless.agent_setup._ensure_runtime_daemon",
+        return_value={"running": True, "started": False, "message": "zotero-headless daemon already running"},
+    )
+    def test_install_plugin_for_openclaw_runs_plugin_install_and_enable(self, _daemon, _which, run_mock):
         run_mock.side_effect = [
             CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
             CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
@@ -175,7 +187,11 @@ class AgentSetupTests(unittest.TestCase):
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
-    def test_install_plugin_for_openclaw_demotes_benign_gateway_stderr_to_notes(self, _which, run_mock):
+    @patch(
+        "zotero_headless.agent_setup._ensure_runtime_daemon",
+        return_value={"running": True, "started": False, "message": "zotero-headless daemon already running"},
+    )
+    def test_install_plugin_for_openclaw_demotes_benign_gateway_stderr_to_notes(self, _daemon, _which, run_mock):
         benign_stderr = "\n".join(
             [
                 "Zotero: daemon unavailable. Start zotero-headless and point the plugin at its HTTP endpoint.",
@@ -200,6 +216,7 @@ class AgentSetupTests(unittest.TestCase):
             self.assertTrue(result["installed"])
             self.assertEqual(result["stderr"], "")
             notes = result["notes"]
+            self.assertIn("zotero-headless daemon already running", notes)
             self.assertIn(
                 "OpenClaw loaded the plugin, but the zotero-headless daemon was not reachable during install.",
                 notes,
@@ -211,7 +228,11 @@ class AgentSetupTests(unittest.TestCase):
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
-    def test_install_plugin_accepts_open_claw_alias(self, _which, run_mock):
+    @patch(
+        "zotero_headless.agent_setup._ensure_runtime_daemon",
+        return_value={"running": True, "started": False, "message": "zotero-headless daemon already running"},
+    )
+    def test_install_plugin_accepts_open_claw_alias(self, _daemon, _which, run_mock):
         run_mock.side_effect = [
             CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
             CompletedProcess(args=["openclaw"], returncode=0, stdout="enabled", stderr=""),
@@ -262,6 +283,9 @@ class AgentSetupTests(unittest.TestCase):
             with patch("zotero_headless.agent_setup.subprocess.run") as run_mock, patch(
                 "zotero_headless.agent_setup.shutil.which",
                 return_value="/usr/local/bin/openclaw",
+            ), patch(
+                "zotero_headless.agent_setup._ensure_runtime_daemon",
+                return_value={"running": True, "started": False, "message": "zotero-headless daemon already running"},
             ):
                 run_mock.side_effect = [
                     CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),
@@ -322,7 +346,11 @@ class AgentSetupTests(unittest.TestCase):
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")
-    def test_refresh_installed_integrations_updates_installed_targets_with_packaged_plugin_fallback(self, _which, run_mock):
+    @patch(
+        "zotero_headless.agent_setup._ensure_runtime_daemon",
+        return_value={"running": True, "started": False, "message": "zotero-headless daemon already running"},
+    )
+    def test_refresh_installed_integrations_updates_installed_targets_with_packaged_plugin_fallback(self, _daemon, _which, run_mock):
         run_mock.side_effect = [
             CompletedProcess(args=["openclaw"], returncode=0, stdout='{"id":"zotero"}', stderr=""),
             CompletedProcess(args=["openclaw"], returncode=0, stdout="installed", stderr=""),

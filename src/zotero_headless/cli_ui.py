@@ -447,6 +447,15 @@ def _bullet_lines(items: list[str]) -> Text:
     return text
 
 
+def _wrapped_text(value: str) -> Text:
+    if Text is None:  # pragma: no cover - rich-only helper
+        raise RuntimeError("rich is not installed")
+    text = Text(value.rstrip("\n"))
+    text.no_wrap = False
+    text.overflow = "fold"
+    return text
+
+
 def render_version_payload_rich(payload: dict[str, Any]):
     if Table is None:
         return render_version_payload(payload)
@@ -519,9 +528,9 @@ def render_update_result_rich(payload: dict[str, Any]):
     stdout = (payload.get("stdout") or "").strip()
     stderr = (payload.get("stderr") or "").strip()
     if stdout:
-        renderables.append(Panel(stdout, title="Stdout", border_style="green"))
+        renderables.append(Panel(_wrapped_text(stdout), title="Stdout", border_style="green"))
     if stderr:
-        renderables.append(Panel(stderr, title="Stderr", border_style="yellow"))
+        renderables.append(Panel(_wrapped_text(stderr), title="Stderr", border_style="yellow"))
     post_update = payload.get("post_update") or {}
     if post_update:
         skills = post_update.get("skills") or []
@@ -573,9 +582,9 @@ def render_install_result_rich(entry: dict[str, Any], *, heading: str):
     stdout = (entry.get("stdout") or "").strip()
     stderr = (entry.get("stderr") or "").strip()
     if stdout:
-        renderables.append(Panel(stdout, title="Stdout", border_style="green"))
+        renderables.append(Panel(_wrapped_text(stdout), title="Stdout", border_style="green"))
     if stderr:
-        renderables.append(Panel(stderr, title="Stderr", border_style="yellow"))
+        renderables.append(Panel(_wrapped_text(stderr), title="Stderr", border_style="yellow"))
     instructions = entry.get("instructions") or []
     if instructions:
         renderables.append(Panel(_bullet_lines(list(instructions)), title="Next steps", border_style="cyan"))

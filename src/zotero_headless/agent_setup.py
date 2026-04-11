@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from .config import Settings
-from .daemon import current_daemon_status
+from .daemon import build_runtime_command, current_daemon_status
 from .utils import ensure_dir
 
 
@@ -258,8 +260,55 @@ def _split_openclaw_messages(raw: str) -> tuple[list[str], list[str]]:
     return _dedupe_preserve_order(stderr_lines), _dedupe_preserve_order(notes)
 
 
+def _ensure_runtime_daemon(settings: Settings) -> dict[str, Any]:
+    status = current_daemon_status(settings)
+    if status.runtime_running:
+        return {
+            "running": True,
+            "started": False,
+            "message": f"zotero-headless daemon already running at {status.local_api_url}",
+        }
+
+    command = build_runtime_command(settings)
+    log_dir = ensure_dir(settings.resolved_state_dir() / "daemon")
+    log_path = log_dir / "openclaw-install.log"
+    with log_path.open("ab") as log_file:
+        subprocess.Popen(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
+            cwd=str(Path.cwd()),
+            env=dict(os.environ),
+        )
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        status = current_daemon_status(settings)
+        if status.runtime_running:
+            return {
+                "running": True,
+                "started": True,
+                "message": f"Started zotero-headless daemon at {status.local_api_url}",
+                "log_path": str(log_path),
+                "command": command,
+            }
+        time.sleep(0.25)
+
+    status = current_daemon_status(settings)
+    return {
+        "running": status.runtime_running,
+        "started": False,
+        "message": "Tried to start zotero-headless daemon, but it did not become healthy within 5 seconds.",
+        "log_path": str(log_path),
+        "command": command,
+    }
+
+
 def _install_openclaw_plugin(
     *,
+    settings: Settings,
     cwd: Path | None = None,
     home: Path | None = None,
     scope: str = "user",
@@ -294,6 +343,7 @@ def _install_openclaw_plugin(
             },
             "instructions": _openclaw_setup_instructions(cwd=cwd, plugin_path=managed_plugin_path),
         }
+    daemon_start = _ensure_runtime_daemon(settings)
     install = subprocess.run(
         [binary, "plugins", "install", "-l", str(managed_plugin_path)],
         check=False,
@@ -315,6 +365,7 @@ def _install_openclaw_plugin(
             },
             "stdout": install.stdout,
             "stderr": install.stderr,
+            "notes": [daemon_start["message"]],
             "instructions": _openclaw_setup_instructions(cwd=cwd, plugin_path=managed_plugin_path),
         }
     enable = subprocess.run(
@@ -330,6 +381,9 @@ def _install_openclaw_plugin(
         f"Already ran `openclaw plugins install -l {managed_plugin_path}`.",
         f"Already ran `openclaw plugins enable {OPENCLAW_PLUGIN_ID}`.",
     ]
+    notes.insert(0, daemon_start["message"])
+    if daemon_start.get("log_path") and not daemon_start.get("running"):
+        notes.append(f"Daemon startup log: {daemon_start['log_path']}")
     notes.extend(note_lines)
     notes.extend(
         [
@@ -519,7 +573,7 @@ def install_mcp_setup(
     if target not in SUPPORTED_SETUP_TARGETS:
         raise ValueError(f"Unsupported setup target: {target}")
     if target == "openclaw":
-        return _install_openclaw_plugin(cwd=cwd, home=home, scope=scope)
+        return _install_openclaw_plugin(settings=settings, cwd=cwd, home=home, scope=scope)
     spec = mcp_stdio_spec(settings)
     if target == "json":
         return {
@@ -669,7 +723,7 @@ def install_plugin(
     if target not in SUPPORTED_PLUGIN_TARGETS:
         raise ValueError(f"Unsupported plugin target: {target}")
     if target == "openclaw":
-        return _install_openclaw_plugin(cwd=cwd, home=home, scope="user")
+        return _install_openclaw_plugin(settings=settings, cwd=cwd, home=home, scope="user")
     if target == "claude-code":
         return _install_claude_code_plugin(settings=settings, cwd=cwd, home=home)
     if target != "codex":

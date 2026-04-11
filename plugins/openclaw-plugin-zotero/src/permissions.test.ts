@@ -10,6 +10,7 @@ describe("resolvePermissions", () => {
   it("returns defaults when no overrides configured", () => {
     const perms = resolvePermissions("user:123", {});
     expect(perms).toEqual(DEFAULT_PERMISSIONS);
+    expect(perms.backup).toBe(false);
   });
 
   it("applies defaultPermissions overrides", () => {

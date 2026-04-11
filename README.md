@@ -50,6 +50,12 @@ This is still pre-release, but it is no longer just a sketch. The codebase alrea
 - MCP setup helpers for common agent tools
 - runtime observability endpoints and background sync status
 
+Current upstream compatibility baseline:
+
+- Zotero `9.0` (released April 10, 2026) is the newest tracked desktop/runtime baseline for local schema assumptions and the optional desktop-helper workflow
+- native citation-key fields introduced in Zotero 9 are now preserved on local desktop reads/writes and attempted on remote writes with automatic fallback for older API behavior
+- Zotero's new browser-based account login flow does not replace the Zotero Web API key required by `zotero-headless` for web sync
+
 ## What It Is For
 
 Typical end-user use cases:

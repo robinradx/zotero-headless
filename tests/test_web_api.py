@@ -86,9 +86,9 @@ class ZoteroWebClientTests(unittest.TestCase):
         self.assertEqual(body["key"], "ITEM1234")
         self.assertEqual(body["itemType"], "book")
         self.assertEqual(body["title"], "Draft")
+        self.assertEqual(body["citationKey"], "doe2026draft")
         self.assertEqual(body["extra"], "Citation Key: doe2026draft\ntex.ids: doe2026draft, doe2026book")
         self.assertNotIn("fields", body)
-        self.assertNotIn("citationKey", body)
         self.assertNotIn("citationAliases", body)
         self.assertNotIn("attachments", body)
         self.assertNotIn("notes", body)
@@ -145,8 +145,85 @@ class ZoteroWebClientTests(unittest.TestCase):
         self.assertEqual(version, 88)
         body = client.calls[0]["json_body"]
         self.assertEqual(body["title"], "Updated")
+        self.assertEqual(body["citationKey"], "doe2026updated")
         self.assertNotIn("fields", body)
-        self.assertNotIn("citationKey", body)
+
+    def test_create_item_retries_without_native_citation_key_if_api_rejects_it(self):
+        client = InspectingWebClient()
+
+        def request_with_citation_retry(method, path, *, query=None, headers=None, json_body=None, expected=(200,)):
+            client.calls.append(
+                {
+                    "method": method,
+                    "path": path,
+                    "query": query,
+                    "headers": headers,
+                    "json_body": json_body,
+                    "expected": expected,
+                }
+            )
+            if len(client.calls) == 1:
+                return 200, client.next_headers, {
+                    "successful": {},
+                    "failed": {"0": {"code": 400, "message": "Invalid property 'citationKey'"}},
+                }
+            return 200, client.next_headers, client.next_payload
+
+        client._request = request_with_citation_retry  # type: ignore[method-assign]
+
+        result = client.create_item(
+            "user:123",
+            {
+                "itemType": "book",
+                "title": "Draft",
+                "citationKey": "doe2026draft",
+                "extra": "Citation Key: doe2026draft",
+            },
+        )
+
+        self.assertEqual(result["version"], 88)
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(client.calls[0]["json_body"][0]["citationKey"], "doe2026draft")
+        self.assertNotIn("citationKey", client.calls[1]["json_body"][0])
+        self.assertEqual(client.calls[1]["json_body"][0]["extra"], "Citation Key: doe2026draft")
+
+    def test_update_item_retries_without_native_citation_key_if_api_rejects_it(self):
+        client = InspectingWebClient()
+
+        def request_with_citation_retry(method, path, *, query=None, headers=None, json_body=None, expected=(200,)):
+            client.calls.append(
+                {
+                    "method": method,
+                    "path": path,
+                    "query": query,
+                    "headers": headers,
+                    "json_body": json_body,
+                    "expected": expected,
+                }
+            )
+            if len(client.calls) == 1:
+                from zotero_headless.web_api import ZoteroApiError
+
+                raise ZoteroApiError(400, "Bad Request", '{"error":"Invalid property \\"citationKey\\""}')
+            return 204, client.next_headers, None
+
+        client._request = request_with_citation_retry  # type: ignore[method-assign]
+
+        version = client.update_item(
+            "user:123",
+            "ITEM1234",
+            {
+                "title": "Updated",
+                "citationKey": "doe2026updated",
+                "extra": "Citation Key: doe2026updated",
+            },
+            item_version=55,
+        )
+
+        self.assertEqual(version, 88)
+        self.assertEqual(len(client.calls), 2)
+        self.assertEqual(client.calls[0]["json_body"]["citationKey"], "doe2026updated")
+        self.assertNotIn("citationKey", client.calls[1]["json_body"])
 
     def test_create_item_maps_parent_item_key_to_parent_item(self):
         client = InspectingWebClient()

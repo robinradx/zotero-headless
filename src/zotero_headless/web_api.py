@@ -58,7 +58,6 @@ class ZoteroWebClient:
             "fields",
             "notes",
             "attachments",
-            "citationKey",
             "citationAliases",
             "annotationTypeID",
             "sourcePath",
@@ -72,7 +71,25 @@ class ZoteroWebClient:
         }
         for key in internal_only:
             payload.pop(key, None)
+        if not payload.get("citationKey"):
+            payload.pop("citationKey", None)
         return payload
+
+    def _payload_rejects_native_citation_key(self, payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        failed = payload.get("failed") or {}
+        for failure in failed.values():
+            message = str((failure or {}).get("message") or "").lower()
+            if "citationkey" in message or "citation key" in message:
+                return True
+        return False
+
+    def _error_rejects_native_citation_key(self, exc: ZoteroApiError) -> bool:
+        if exc.status != 400:
+            return False
+        text = f"{exc}\n{exc.body or ''}".lower()
+        return "citationkey" in text or "citation key" in text
 
     def _require_successful_create(self, payload: Any) -> None:
         if not isinstance(payload, dict):
@@ -271,6 +288,15 @@ class ZoteroWebClient:
             headers=headers,
             json_body=[body],
         )
+        if "citationKey" in body and self._payload_rejects_native_citation_key(payload):
+            fallback_body = dict(body)
+            fallback_body.pop("citationKey", None)
+            _, response_headers, payload = self._request(
+                "POST",
+                f"{self.library_path(library_id)}/items",
+                headers=headers,
+                json_body=[fallback_body],
+            )
         self._require_successful_create(payload)
         return {"result": payload, "version": int(response_headers.get("Last-Modified-Version", "0"))}
 
@@ -430,13 +456,26 @@ class ZoteroWebClient:
         headers = {}
         if item_version is not None and "version" not in body:
             headers["If-Unmodified-Since-Version"] = str(item_version)
-        _, response_headers, _ = self._request(
-            method,
-            f"{self.library_path(library_id)}/items/{item_key}",
-            headers=headers,
-            json_body=body,
-            expected=(204,),
-        )
+        try:
+            _, response_headers, _ = self._request(
+                method,
+                f"{self.library_path(library_id)}/items/{item_key}",
+                headers=headers,
+                json_body=body,
+                expected=(204,),
+            )
+        except ZoteroApiError as exc:
+            if "citationKey" not in body or not self._error_rejects_native_citation_key(exc):
+                raise
+            fallback_body = dict(body)
+            fallback_body.pop("citationKey", None)
+            _, response_headers, _ = self._request(
+                method,
+                f"{self.library_path(library_id)}/items/{item_key}",
+                headers=headers,
+                json_body=fallback_body,
+                expected=(204,),
+            )
         return int(response_headers.get("Last-Modified-Version", "0"))
 
     def delete_item(self, library_id: str, item_key: str, *, item_version: int) -> int:

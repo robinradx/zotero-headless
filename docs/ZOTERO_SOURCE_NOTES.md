@@ -2,6 +2,13 @@
 
 The repo no longer vendors a Zotero source snapshot. These notes describe the upstream Zotero areas that matter for the optional desktop-helper path and for local desktop interoperability work.
 
+Current tracked upstream release baseline: Zotero `9.0` from April 10, 2026.
+
+Upstream changes in that release that matter most here:
+
+- native citation-key support is now part of Zotero itself, so local desktop interoperability should prefer real `citationKey` fields when present and only fall back to `extra` when needed
+- Zotero desktop now uses a browser-based account login flow, but `zotero-headless` still depends on Zotero Web API keys for remote sync
+
 Use them together with:
 
 - `desktop_helper/metadata.json` for the pinned upstream revision you are validating against

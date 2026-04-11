@@ -1479,6 +1479,24 @@ class LocalDesktopAdapterTests(unittest.TestCase):
             self.assertEqual(item["payload"]["citationKey"], "doe2026alpha")
             self.assertEqual(item["payload"]["citationAliases"], ["doe2026alpha", "doe2026book"])
 
+    def test_import_snapshot_detects_native_citation_key_field(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "Zotero"
+            sqlite_path = create_local_zotero_fixture(data_dir)
+            with closing(sqlite3.connect(sqlite_path)) as conn:
+                conn.execute("INSERT INTO fieldsCombined (fieldID, fieldName) VALUES (2, 'citationKey')")
+                conn.execute("INSERT INTO itemDataValues (valueID, value) VALUES (2, 'doe2026native')")
+                conn.execute("INSERT INTO itemData (itemID, fieldID, valueID) VALUES (10, 2, 2)")
+                conn.commit()
+            canonical = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            adapter = LocalDesktopAdapter(canonical)
+
+            adapter.import_snapshot(str(data_dir))
+
+            item = canonical.get_entity("local:1", EntityType.ITEM, "ITEM1234")
+            self.assertEqual(item["payload"]["citationKey"], "doe2026native")
+            self.assertEqual(item["payload"]["fields"]["citationKey"], "doe2026native")
+
     def test_apply_pending_writes_falls_back_to_extra_for_citation_key(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp) / "Zotero"
@@ -1511,6 +1529,42 @@ class LocalDesktopAdapterTests(unittest.TestCase):
             updated = db.get_item_detail("ITEM1234")
             self.assertEqual(updated["citationKey"], "doe2026alpha")
             self.assertIn("Citation Key: doe2026alpha", updated["fields"]["extra"])
+
+    def test_apply_pending_writes_updates_native_citation_key_field(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp) / "Zotero"
+            sqlite_path = create_local_zotero_fixture(data_dir)
+            with closing(sqlite3.connect(sqlite_path)) as conn:
+                conn.execute("INSERT INTO fieldsCombined (fieldID, fieldName) VALUES (2, 'citationKey')")
+                conn.execute("INSERT INTO fieldsCombined (fieldID, fieldName) VALUES (3, 'extra')")
+                conn.execute("INSERT INTO itemDataValues (valueID, value) VALUES (2, 'doe2026seed')")
+                conn.execute("INSERT INTO itemData (itemID, fieldID, valueID) VALUES (10, 2, 2)")
+                conn.commit()
+            canonical = CanonicalStore(Path(tmp) / "canonical.sqlite")
+            adapter = LocalDesktopAdapter(canonical)
+            adapter.import_snapshot(str(data_dir))
+
+            canonical.save_entity(
+                "local:1",
+                EntityType.ITEM,
+                {
+                    "itemType": "book",
+                    "title": "Alpha Applied",
+                    "citationKey": "doe2026native",
+                },
+                entity_key="ITEM1234",
+                synced=False,
+                change_type=ChangeType.UPDATE,
+                base_version=3,
+            )
+
+            result = adapter.apply_pending_writes(str(data_dir), library_id="local:1")
+
+            self.assertEqual(result["applied"], 1)
+            db = LocalZoteroDB(sqlite_path)
+            updated = db.get_item_detail("ITEM1234")
+            self.assertEqual(updated["citationKey"], "doe2026native")
+            self.assertIn("Citation Key: doe2026native", updated["fields"]["extra"])
 
 
 if __name__ == "__main__":

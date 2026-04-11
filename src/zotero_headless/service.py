@@ -136,7 +136,8 @@ class HeadlessService:
             return result
         library = self.store.get_library(library_id) or {}
         client = ZoteroWebClient(self.settings)
-        result = client.create_item(library_id, item_data, library_version=library.get("version"))
+        payload = self._normalize_item_payload(item_data)
+        result = client.create_item(library_id, payload, library_version=library.get("version"))
         self.sync.sync_remote_library(library_id)
         return result
 
@@ -183,10 +184,13 @@ class HeadlessService:
         if not current:
             raise KeyError(f"Item not found: {library_id}/{item_key}")
         client = ZoteroWebClient(self.settings)
+        base = {} if replace else dict(current.get("data") or {})
+        base.update(item_data)
+        payload = self._normalize_item_payload(base)
         version = client.update_item(
             library_id,
             item_key,
-            item_data,
+            payload,
             item_version=current["version"],
             full=replace,
         )

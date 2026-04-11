@@ -1,5 +1,5 @@
 // src/tools/search.ts
-import { Type } from "@sinclair/typebox";
+import { Type } from "../schema.js";
 import type { UnifiedClient } from "../client.js";
 import type { ZoteroPluginConfig } from "../types.js";
 import { checkPermission } from "../permissions.js";

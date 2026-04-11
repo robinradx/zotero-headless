@@ -254,6 +254,7 @@ class AgentSetupTests(unittest.TestCase):
         for plugin_root in plugin_roots:
             for path in plugin_root.rglob("*.ts"):
                 self.assertNotIn("child_process", path.read_text(encoding="utf-8"), str(path))
+                self.assertNotIn("@sinclair/typebox", path.read_text(encoding="utf-8"), str(path))
 
     @patch("zotero_headless.agent_setup.subprocess.run")
     @patch("zotero_headless.agent_setup.shutil.which", return_value="/usr/local/bin/openclaw")

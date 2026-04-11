@@ -95,7 +95,7 @@ The intended workflow is:
 - `tests/`
   - regression coverage for the runtime, sync, adapter, and tooling surfaces
 - `docs/`
-  - architecture notes and implementation planning
+  - branch guides and upstream Zotero notes
 - `desktop_helper/`
   - metadata and patch workflow for the optional external Zotero desktop-helper path
 
@@ -448,8 +448,13 @@ Implemented:
 
 ## Documentation
 
-- [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-- [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md)
+- [docs/README.md](./docs/README.md)
+- [USE_CASES.md](./docs/USE_CASES.md)
+- [CLI.md](./docs/CLI.md)
+- [API_AND_MCP.md](./docs/API_AND_MCP.md)
+- [LOCAL_DESKTOP.md](./docs/LOCAL_DESKTOP.md)
+- [REMOTE_SYNC.md](./docs/REMOTE_SYNC.md)
+- [DESKTOP_HELPER.md](./docs/DESKTOP_HELPER.md)
 - [ZOTERO_SOURCE_NOTES.md](./docs/ZOTERO_SOURCE_NOTES.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 

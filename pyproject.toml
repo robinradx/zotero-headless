@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zotero-headless"
-version = "1.1.6"
+version = "1.1.7"
 description = "Headless Zotero-compatible runtime with CLI, HTTP API, MCP, local desktop interoperability, web sync, qmd-backed semantic search, and support for your agent tool of choice"
 readme = "README.md"
 requires-python = ">=3.11"

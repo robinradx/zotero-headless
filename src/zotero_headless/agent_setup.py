@@ -75,7 +75,7 @@ def _env_map(settings: Settings) -> dict[str, str]:
 def mcp_stdio_spec(settings: Settings) -> dict[str, Any]:
     spec: dict[str, Any] = {
         "command": "zotero-headless-mcp",
-        "args": [],
+        "args": ["--profile", settings.selected_profile] if settings.selected_profile else [],
     }
     env = _env_map(settings)
     if env:
@@ -948,11 +948,11 @@ Common recipes:
   - `zhl raw local plan-apply --library local:1`
   - `zhl raw local apply --library local:1`
 - Headless daemon workflow:
-  - `zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300`
+  - `zhl-daemon serve --host 127.0.0.1 --port 23119 --sync-interval 300`
 - Daemon observability:
-  - `curl -s http://127.0.0.1:8787/daemon/runtime`
-  - `curl -s http://127.0.0.1:8787/daemon/jobs`
-  - `curl -s http://127.0.0.1:8787/metrics`
+  - `curl -s http://127.0.0.1:23119/daemon/runtime`
+  - `curl -s http://127.0.0.1:23119/daemon/jobs`
+  - `curl -s http://127.0.0.1:23119/metrics`
 
 Anti-patterns:
 - Do not scan exported markdown directly when qmd can answer the retrieval question.

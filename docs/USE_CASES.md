@@ -38,7 +38,7 @@ Typical flow:
 ```text
 uv tool install zotero-headless
 zhl setup start
-zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
+zhl-daemon serve --host 0.0.0.0 --port 23119 --sync-interval 300
 ```
 
 Then connect through:

@@ -10,7 +10,7 @@ describe("DaemonClient", () => {
   let client: DaemonClient;
 
   beforeEach(() => {
-    client = new DaemonClient({ host: "localhost", port: 8787 });
+    client = new DaemonClient({ host: "127.0.0.1", port: 23119 });
     mockFetch.mockReset();
   });
 

@@ -119,7 +119,7 @@ Other supported setup targets include `cursor`, `claude-desktop`, `gemini`, `cli
 If this machine is the runtime host:
 
 ```text
-zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
+zhl-daemon serve --host 0.0.0.0 --port 23119 --sync-interval 300
 ```
 
 ### 4. Smoke-test the install
@@ -128,6 +128,15 @@ zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
 zhl capabilities
 zhl daemon status
 zhl setup list
+```
+
+If you need multiple isolated accounts on one machine, use named profiles:
+
+```text
+zhl --profile alice setup start
+zhl --profile alice daemon serve --port 8787
+zhl --profile bob setup start
+zhl --profile bob daemon serve --port 8788
 ```
 
 If you configured remote sync:
@@ -205,13 +214,13 @@ Use the API for:
 You can expose it with either:
 
 ```text
-zhl api serve --host 127.0.0.1 --port 8787
+zhl api serve --host 127.0.0.1 --port 23119
 ```
 
 or:
 
 ```text
-zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300
+zhl-daemon serve --host 127.0.0.1 --port 23119 --sync-interval 300
 ```
 
 ### MCP
@@ -254,13 +263,13 @@ zhl qmd query "papers about transformers in NLP"
 ```text
 uv tool install zotero-headless
 zhl setup start
-zhl-daemon serve --host 0.0.0.0 --port 8787 --sync-interval 300
+zhl-daemon serve --host 0.0.0.0 --port 23119 --sync-interval 300
 ```
 
 Useful next commands:
 
 ```text
-curl -s http://127.0.0.1:8787/capabilities
+curl -s http://127.0.0.1:23119/capabilities
 zhl raw sync discover
 ```
 

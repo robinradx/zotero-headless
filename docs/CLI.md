@@ -38,6 +38,33 @@ zhl setup libraries
 zhl setup local
 ```
 
+## Profiles
+
+`zotero-headless` supports named profiles inside the normal config file.
+
+Use a profile explicitly:
+
+```text
+zhl --profile alice setup start
+zhl --profile alice daemon serve --port 8787
+zhl --profile bob daemon serve --port 8788
+```
+
+Inspect configured profiles:
+
+```text
+zhl profile list
+zhl profile set-default alice
+```
+
+You can also select a profile through:
+
+```text
+ZOTERO_HEADLESS_PROFILE=alice
+```
+
+When a named profile does not set `state_dir` explicitly, it gets an isolated default state directory automatically.
+
 Inspect or install MCP client setup:
 
 ```text
@@ -163,13 +190,13 @@ zhl daemon command
 Run the daemon:
 
 ```text
-zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300
+zhl-daemon serve --host 127.0.0.1 --port 23119 --sync-interval 300
 ```
 
 Run the HTTP API directly:
 
 ```text
-zhl api --host 127.0.0.1 --port 8787
+zhl api --host 127.0.0.1 --port 23119
 ```
 
 Run the MCP server:

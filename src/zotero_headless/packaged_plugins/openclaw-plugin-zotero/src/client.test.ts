@@ -10,7 +10,7 @@ describe("UnifiedClient", () => {
   let mockDaemon: DaemonClient;
 
   beforeEach(() => {
-    mockDaemon = new DaemonClient({ host: "localhost", port: 8787 });
+    mockDaemon = new DaemonClient({ host: "127.0.0.1", port: 23119 });
     client = new UnifiedClient(mockDaemon);
     vi.resetAllMocks();
   });

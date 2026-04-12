@@ -1,6 +1,9 @@
 import unittest
+import tempfile
+from unittest.mock import patch
 
-from zotero_headless.raw_cli import build_parser
+from zotero_headless.config import Settings
+from zotero_headless.raw_cli import build_parser, main
 
 
 class CliRawParserTests(unittest.TestCase):
@@ -11,6 +14,12 @@ class CliRawParserTests(unittest.TestCase):
         self.assertEqual(args.raw_command, "item")
         self.assertEqual(args.item_command, "create")
         self.assertEqual(args.library_id, "user:123")
+
+    def test_global_profile_option_parses_before_command(self):
+        args = build_parser().parse_args(["--profile", "alice", "raw", "item", "create", "user:123", '{"itemType":"note"}'])
+
+        self.assertEqual(args.profile, "alice")
+        self.assertEqual(args.command, "raw")
 
     def test_raw_sync_pull_parses_library_argument(self):
         args = build_parser().parse_args(["raw", "sync", "pull", "--library", "user:123"])
@@ -67,6 +76,28 @@ class CliRawParserTests(unittest.TestCase):
         self.assertEqual(args.command, "plugin")
         self.assertEqual(args.plugin_command, "install")
         self.assertEqual(args.tool, "open-claw")
+
+    def test_raw_api_serve_uses_settings_daemon_port_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(state_dir=tmp, daemon_port=23119)
+            with patch("zotero_headless.raw_cli.load_settings", return_value=settings), patch(
+                "zotero_headless.raw_cli.serve_api",
+            ) as serve_api_mock:
+                exit_code = main(["api", "serve"])
+
+            self.assertEqual(exit_code, 0)
+            serve_api_mock.assert_called_once_with(settings, "127.0.0.1", 23119)
+
+    def test_raw_api_serve_loads_named_profile_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(state_dir=tmp, daemon_port=23119)
+            with patch("zotero_headless.raw_cli.load_settings", return_value=settings) as load_settings_mock, patch(
+                "zotero_headless.raw_cli.serve_api",
+            ):
+                exit_code = main(["--profile", "alice", "api", "serve"])
+
+            self.assertEqual(exit_code, 0)
+            load_settings_mock.assert_called_with(profile="alice")
 
 
 if __name__ == "__main__":

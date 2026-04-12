@@ -41,7 +41,7 @@ from .cli_ui import (
     render_update_result,
     render_version_payload,
 )
-from .config import Settings, load_settings, save_settings
+from .config import Settings, active_profile_name, load_settings, save_settings
 from .core import CanonicalStore, ChangeType, EntityType
 from .daemon import build_daemon_command, build_runtime_command, current_daemon_status, serve_daemon_runtime
 from .library_routing import merged_libraries, prefers_canonical_reads
@@ -84,6 +84,7 @@ def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None
         warnings.append("qmd is not installed. qmd-backed search and indexing stay unavailable until you install `qmd`.")
     return {
         "config": str(config_path),
+        "profile": active_profile_name(settings),
         "autodiscovered": autodiscovered or {},
         "settings": settings.as_dict(),
         "citation_export_path": str(settings.resolved_citation_export_path()),
@@ -181,7 +182,7 @@ def _add_machine_commands(sub) -> None:
     api_sub = api.add_subparsers(dest="api_command", required=True)
     api_serve = api_sub.add_parser("serve")
     api_serve.add_argument("--host", default="127.0.0.1")
-    api_serve.add_argument("--port", type=int, default=8787)
+    api_serve.add_argument("--port", type=int)
 
     recovery = sub.add_parser("recovery")
     recovery_sub = recovery.add_subparsers(dest="recovery_command", required=True)
@@ -273,6 +274,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Headless Zotero-compatible runtime with CLI, API, MCP, local desktop interoperability, and web sync.",
     )
     parser.add_argument("--json", action="store_true", help="Emit JSON output for human-facing commands.")
+    parser.add_argument("--profile", help="Load and save settings for the named profile.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     config = sub.add_parser("config")
@@ -359,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
     command = args.raw_command if args.command == "raw" else args.command
 
     if command == "config":
-        settings = load_settings()
+        settings = load_settings(profile=args.profile)
         if args.config_command == "autodiscover":
             from .autodiscover import autodiscover_settings
 
@@ -394,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
                 daemon_host=settings.daemon_host,
                 daemon_port=settings.daemon_port,
             )
-            path = save_settings(updated)
+            path = save_settings(updated, profile=args.profile)
             _emit(
                 _setup_payload(path, updated),
                 as_json=args.json,
@@ -403,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.config_command == "wizard":
             result = run_setup_wizard(settings)
-            path = save_settings(result.settings)
+            path = save_settings(result.settings, profile=args.profile)
             _emit(
                 _setup_payload(
                     path,
@@ -420,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if command == "capabilities":
-        settings = load_settings(ensure_dirs=False)
+        settings = load_settings(profile=args.profile, ensure_dirs=False)
         _print(get_capabilities(settings))
         return 0
 
@@ -435,12 +437,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         payload = run_update(plan)
         if payload.get("updated"):
-            payload["post_update"] = refresh_installed_integrations(load_settings(ensure_dirs=False), cwd=cwd)
+            payload["post_update"] = refresh_installed_integrations(load_settings(profile=args.profile, ensure_dirs=False), cwd=cwd)
         _emit(payload, as_json=args.json, renderer=render_update_result)
         return 0
 
     if command == "setup":
-        settings = load_settings(ensure_dirs=False)
+        settings = load_settings(profile=args.profile, ensure_dirs=False)
         cwd = Path.cwd()
         if hasattr(args, "tool"):
             args.tool = normalize_target_name(args.tool)
@@ -453,7 +455,7 @@ def main(argv: list[str] | None = None) -> int:
                 "local": "local",
             }[args.setup_command]
             result = run_setup_wizard(settings, mode=mode)
-            path = save_settings(result.settings)
+            path = save_settings(result.settings, profile=args.profile)
             _emit(
                 _setup_payload(
                     path,
@@ -512,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     if command == "plugin":
         args.tool = normalize_target_name(args.tool)
         if args.plugin_command in {"install", "update"}:
-            settings = load_settings(ensure_dirs=False)
+            settings = load_settings(profile=args.profile, ensure_dirs=False)
             payload = install_plugin_set(args.tool, settings, cwd=cwd)
             _emit(
                 payload if args.tool == "all" else payload[0],
@@ -532,12 +534,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if command == "doctor":
-        settings = load_settings(ensure_dirs=False)
+        settings = load_settings(profile=args.profile, ensure_dirs=False)
         _emit(doctor_report(settings, cwd=Path.cwd()), as_json=args.json, renderer=render_doctor_report)
         return 0
 
     if command == "daemon":
-        settings = load_settings(ensure_dirs=False)
+        settings = load_settings(profile=args.profile, ensure_dirs=False)
         if args.daemon_command == "status":
             _emit(current_daemon_status(settings).to_dict(), as_json=args.json, renderer=render_daemon_status)
             return 0
@@ -553,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         if args.daemon_command == "serve":
-            runtime_settings = load_settings()
+            runtime_settings = load_settings(profile=args.profile)
             serve_daemon_runtime(
                 runtime_settings,
                 host=args.host,
@@ -562,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
-    settings = load_settings()
+    settings = load_settings(profile=args.profile)
     canonical = CanonicalStore(settings.resolved_canonical_db())
     store = MirrorStore(settings.resolved_mirror_db())
     qmd_indexer = QmdAutoIndexer(settings)
@@ -824,7 +826,7 @@ def main(argv: list[str] | None = None) -> int:
                 settings.citation_export_format = args.format
             if args.path is not None:
                 settings.citation_export_path = args.path
-            save_settings(settings)
+            save_settings(settings, profile=args.profile)
             client = CitationExportClient(settings)
             _print(
                 {
@@ -836,7 +838,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.citations_command == "disable":
             settings.citation_export_enabled = False
-            save_settings(settings)
+            save_settings(settings, profile=args.profile)
             _print({"settings": settings.as_dict(), "status": CitationExportClient(settings).status()})
             return 0
         if args.citations_command == "export":
@@ -904,7 +906,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if command == "api" and args.api_command == "serve":
-        serve_api(settings, args.host, args.port)
+        serve_api(settings, args.host, args.port or settings.daemon_port)
         return 0
 
     if command == "mcp" and args.mcp_command == "serve":

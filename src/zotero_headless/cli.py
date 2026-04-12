@@ -53,7 +53,7 @@ from .cli_ui import (
     render_version_payload,
     render_version_payload_rich,
 )
-from .config import Settings, load_settings, save_settings
+from .config import Settings, active_profile_name, list_profiles, load_settings, save_settings, set_default_profile
 from .core import CanonicalStore, EntityType
 from .daemon import build_daemon_command, build_runtime_command, current_daemon_status, serve_daemon_runtime
 from .installer_update import build_update_plan, run_update, version_payload
@@ -84,6 +84,7 @@ sync_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Huma
 local_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Human-friendly local desktop interoperability commands.")
 citations_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Manage the auto-generated citations database export.")
 recovery_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Snapshot, verify, restore, and replicate full headless recovery state.")
+profile_app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", help="Inspect and manage named settings profiles.")
 app.add_typer(setup_app, name="setup")
 app.add_typer(skill_app, name="skill")
 app.add_typer(plugin_app, name="plugin")
@@ -92,13 +93,16 @@ app.add_typer(sync_app, name="sync")
 app.add_typer(local_app, name="local")
 app.add_typer(citations_app, name="citations")
 app.add_typer(recovery_app, name="recovery")
+app.add_typer(profile_app, name="profile")
 
 console = Console()
+_ACTIVE_PROFILE: str | None = None
 
 
 class CliState:
     def __init__(self) -> None:
         self.json_output = False
+        self.profile: str | None = None
 
 
 def _state(ctx: typer.Context) -> CliState:
@@ -140,7 +144,7 @@ def _render_install_results(entries: list[dict[str, object]], *, heading: str) -
 
 
 def _human_settings(*, ensure_dirs: bool = True) -> Settings:
-    return load_settings(ensure_dirs=ensure_dirs)
+    return load_settings(profile=_ACTIVE_PROFILE, ensure_dirs=ensure_dirs)
 
 
 def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None, discovered_libraries=None, selected_remote_libraries=None) -> dict[str, object]:
@@ -149,6 +153,7 @@ def _setup_payload(config_path: Path, settings: Settings, *, autodiscovered=None
         warnings.append("qmd is not installed. qmd-backed search and indexing stay unavailable until you install `qmd`.")
     return {
         "config": str(config_path),
+        "profile": active_profile_name(settings),
         "autodiscovered": autodiscovered or {},
         "settings": settings.as_dict(),
         "citation_export_path": str(settings.resolved_citation_export_path()),
@@ -189,6 +194,16 @@ def _library_table(entries: list[dict[str, object]]) -> Table:
     return table
 
 
+def _profiles_table(payload: dict[str, object]) -> Table:
+    table = Table(title="Profiles")
+    table.add_column("Name")
+    table.add_column("Default")
+    default_profile = str(payload.get("default_profile") or "")
+    for profile in payload.get("profiles") or []:
+        table.add_row(str(profile), "yes" if str(profile) == default_profile else "no")
+    return table
+
+
 def _sync_summary(title: str, payload: dict[str, object]) -> Panel:
     rows = []
     for key, value in payload.items():
@@ -200,8 +215,12 @@ def _sync_summary(title: str, payload: dict[str, object]) -> Panel:
 def main_callback(
     ctx: typer.Context,
     json_output: bool = typer.Option(False, "--json", help="Emit JSON output instead of human-friendly formatting."),
+    profile: str | None = typer.Option(None, "--profile", help="Load and save settings for the named profile."),
 ) -> None:
+    global _ACTIVE_PROFILE
     _state(ctx).json_output = json_output
+    _state(ctx).profile = profile
+    _ACTIVE_PROFILE = profile
 
 
 @app.command("version")
@@ -642,6 +661,26 @@ def recovery_repositories_command(ctx: typer.Context) -> None:
     _emit(ctx, _recovery_service(_human_settings()).repositories(), title="Recovery repositories")
 
 
+@profile_app.command("list")
+def profile_list_command(ctx: typer.Context) -> None:
+    payload = list_profiles()
+    if _state(ctx).json_output:
+        _emit(ctx, payload)
+        return
+    console.print(_profiles_table(payload))
+
+
+@profile_app.command("set-default")
+def profile_set_default_command(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Profile name to make the default."),
+) -> None:
+    path = set_default_profile(name)
+    payload = list_profiles()
+    payload["config"] = str(path)
+    _emit(ctx, payload, renderer=render_config_payload, title="Profiles")
+
+
 @recovery_app.command("snapshot-create")
 def recovery_snapshot_create_command(
     ctx: typer.Context,
@@ -765,11 +804,12 @@ def raw_command(ctx: typer.Context) -> None:
 def api_command(
     ctx: typer.Context,
     host: str = typer.Option("127.0.0.1", "--host"),
-    port: int = typer.Option(8787, "--port"),
+    port: int | None = typer.Option(None, "--port"),
 ) -> None:
     if ctx.args and ctx.args[0] != "serve":
         raise typer.BadParameter("The human API command only supports `zhl api --host ... --port ...`. Use `zhl raw api ...` for strict subcommands.")
-    serve_api(_human_settings(), host, port)
+    settings = _human_settings()
+    serve_api(settings, host, port or settings.daemon_port)
 
 
 @app.command("mcp")

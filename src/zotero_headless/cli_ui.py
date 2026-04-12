@@ -604,6 +604,7 @@ def render_setup_result_rich(payload: dict[str, Any]):
     citation_export_path = payload.get("citation_export_path") or settings.get("citation_export_path") or "not configured"
     summary = _summary_table()
     summary.add_row("Config saved", str(payload.get("config")))
+    summary.add_row("Profile", str(payload.get("profile") or "default"))
     summary.add_row("Local desktop", _bool_text(bool(settings.get("data_dir"))))
     summary.add_row("Remote sync", _bool_text(bool(settings.get("api_key"))))
     summary.add_row("Default remote library", str(settings.get("default_library_id") or "none"))

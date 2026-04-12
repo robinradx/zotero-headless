@@ -34,7 +34,7 @@ Use CLI for:
 
 Prefer `zhl raw` for machine-parseable JSON output when piping or processing results programmatically.
 
-### HTTP API (daemon at default port 8787)
+### HTTP API (daemon at default port 23119)
 
 Best for persistent operations, background sync, and observability. Use when the daemon is running.
 

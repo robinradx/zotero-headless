@@ -25,8 +25,8 @@ export default definePluginEntry({
 
     // Resolve config with defaults
     const daemonCfg: DaemonConfig = {
-      host: String(pluginCfg.daemon?.host ?? "localhost"),
-      port: Number(pluginCfg.daemon?.port ?? 8787),
+      host: String(pluginCfg.daemon?.host ?? "127.0.0.1"),
+      port: Number(pluginCfg.daemon?.port ?? 23119),
       syncOnStartup: pluginCfg.daemon?.syncOnStartup !== false,
     };
 

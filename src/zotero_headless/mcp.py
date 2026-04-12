@@ -660,12 +660,14 @@ def run_stdio_server(settings: Settings) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    return argparse.ArgumentParser(prog="zotero-headless-mcp")
+    parser = argparse.ArgumentParser(prog="zotero-headless-mcp")
+    parser.add_argument("--profile", help="Load settings for the named profile.")
+    return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    build_parser().parse_args(argv)
-    run_stdio_server(load_settings())
+    args = build_parser().parse_args(argv)
+    run_stdio_server(load_settings(profile=args.profile))
     return 0
 
 

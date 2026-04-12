@@ -3,8 +3,11 @@ from __future__ import annotations
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .utils import default_config_path, default_state_dir, ensure_dir, read_json, write_json
+
+DEFAULT_PROFILE = "default"
 
 
 @dataclass(slots=True)
@@ -31,9 +34,10 @@ class Settings:
     zotero_bin: str | None = None
     daemon_host: str = "127.0.0.1"
     daemon_port: int = 23119
+    selected_profile: str | None = field(default=None, repr=False, compare=False)
 
     def resolved_state_dir(self) -> Path:
-        return Path(self.state_dir).expanduser() if self.state_dir else default_state_dir()
+        return Path(self.state_dir).expanduser() if self.state_dir else default_state_dir(self.selected_profile)
 
     def resolved_canonical_db(self) -> Path:
         return Path(self.canonical_db).expanduser() if self.canonical_db else self.resolved_state_dir() / "canonical.sqlite"
@@ -79,13 +83,108 @@ class Settings:
         ensure_dir(self.resolved_recovery_temp_dir())
 
     def as_dict(self) -> dict:
-        return asdict(self)
+        payload = asdict(self)
+        payload.pop("selected_profile", None)
+        return payload
 
 
-def load_settings(path: Path | None = None, *, ensure_dirs: bool = True) -> Settings:
+def active_profile_name(settings: Settings) -> str:
+    return settings.selected_profile or DEFAULT_PROFILE
+
+
+def normalize_profile_name(profile: str | None) -> str | None:
+    if profile is None:
+        return None
+    normalized = str(profile).strip()
+    if not normalized:
+        raise ValueError("Profile name must not be empty")
+    return normalized
+
+
+def default_profile_name() -> str | None:
+    return normalize_profile_name(os.environ.get("ZOTERO_HEADLESS_PROFILE"))
+
+
+def _config_uses_profiles(raw: Any) -> bool:
+    return isinstance(raw, dict) and isinstance(raw.get("profiles"), dict)
+
+
+def _legacy_profile_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(raw)
+    payload.pop("default_profile", None)
+    payload.pop("profiles", None)
+    if payload and payload.get("state_dir") is None:
+        payload["state_dir"] = str(default_state_dir())
+    return payload
+
+
+def _settings_from_payload(payload: dict[str, Any], *, selected_profile: str | None) -> Settings:
+    return Settings(**payload, selected_profile=selected_profile)
+
+
+def list_profiles(path: Path | None = None) -> dict[str, Any]:
     config_path = path or default_config_path()
     raw = read_json(config_path, {})
-    settings = Settings(**raw)
+    if _config_uses_profiles(raw):
+        profile_names = sorted(str(name) for name in (raw.get("profiles") or {}).keys())
+        default_profile = normalize_profile_name(raw.get("default_profile")) or (profile_names[0] if profile_names else None)
+        return {
+            "config": str(config_path),
+            "default_profile": default_profile,
+            "profiles": profile_names,
+        }
+    if isinstance(raw, dict) and raw:
+        return {
+            "config": str(config_path),
+            "default_profile": DEFAULT_PROFILE,
+            "profiles": [DEFAULT_PROFILE],
+        }
+    return {
+        "config": str(config_path),
+        "default_profile": None,
+        "profiles": [],
+    }
+
+
+def set_default_profile(profile: str, path: Path | None = None) -> Path:
+    config_path = path or default_config_path()
+    raw = read_json(config_path, {})
+    normalized = normalize_profile_name(profile)
+    if not _config_uses_profiles(raw):
+        legacy = _legacy_profile_payload(raw if isinstance(raw, dict) else {})
+        raw = {
+            "default_profile": DEFAULT_PROFILE,
+            "profiles": {DEFAULT_PROFILE: legacy},
+        }
+    profiles = raw.get("profiles") or {}
+    if normalized not in profiles:
+        raise ValueError(f"Unknown profile: {normalized}")
+    raw["default_profile"] = normalized
+    write_json(config_path, raw)
+    return config_path
+
+
+def load_settings(path: Path | None = None, *, profile: str | None = None, ensure_dirs: bool = True) -> Settings:
+    config_path = path or default_config_path()
+    raw = read_json(config_path, {})
+    requested_profile = normalize_profile_name(profile) or default_profile_name()
+    selected_profile: str | None = None
+    payload: dict[str, Any]
+
+    if _config_uses_profiles(raw):
+        profiles = raw.get("profiles") or {}
+        selected_profile = requested_profile or normalize_profile_name(raw.get("default_profile")) or DEFAULT_PROFILE
+        payload = dict(profiles.get(selected_profile) or {})
+    else:
+        if requested_profile and requested_profile != DEFAULT_PROFILE:
+            selected_profile = requested_profile
+            payload = {}
+        else:
+            payload = dict(raw if isinstance(raw, dict) else {})
+            if requested_profile == DEFAULT_PROFILE:
+                selected_profile = DEFAULT_PROFILE
+
+    settings = _settings_from_payload(payload, selected_profile=selected_profile)
     env_data_dir = os.environ.get("ZOTERO_HEADLESS_DATA_DIR")
     env_api_key = os.environ.get("ZOTERO_HEADLESS_API_KEY")
     env_user_id = os.environ.get("ZOTERO_HEADLESS_USER_ID")
@@ -114,8 +213,41 @@ def load_settings(path: Path | None = None, *, ensure_dirs: bool = True) -> Sett
     return settings
 
 
-def save_settings(settings: Settings, path: Path | None = None) -> Path:
+def save_settings(
+    settings: Settings,
+    path: Path | None = None,
+    *,
+    profile: str | None = None,
+    make_default: bool = False,
+) -> Path:
     config_path = path or default_config_path()
     ensure_dir(config_path.parent)
-    write_json(config_path, settings.as_dict())
+    raw = read_json(config_path, {})
+    payload = settings.as_dict()
+    target_profile = normalize_profile_name(profile) or settings.selected_profile or default_profile_name()
+
+    if target_profile is None and not _config_uses_profiles(raw):
+        write_json(config_path, payload)
+        return config_path
+
+    if _config_uses_profiles(raw):
+        profiles = dict(raw.get("profiles") or {})
+        default_profile = normalize_profile_name(raw.get("default_profile"))
+    else:
+        profiles = {}
+        default_profile = None
+        legacy = _legacy_profile_payload(raw if isinstance(raw, dict) else {})
+        if legacy:
+            profiles[DEFAULT_PROFILE] = legacy
+            default_profile = DEFAULT_PROFILE
+
+    normalized_target = target_profile or default_profile or DEFAULT_PROFILE
+    profiles[normalized_target] = payload
+    write_json(
+        config_path,
+        {
+            "default_profile": normalized_target if make_default or default_profile is None else default_profile,
+            "profiles": profiles,
+        },
+    )
     return config_path

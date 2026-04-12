@@ -21,6 +21,7 @@ from zotero_headless.agent_setup import (
     install_skill_set,
     installed_plugin_targets,
     installed_skill_targets,
+    mcp_stdio_spec,
     remove_mcp_setup,
     skill_target_path,
     setup_list,
@@ -29,6 +30,12 @@ from zotero_headless.config import Settings
 
 
 class AgentSetupTests(unittest.TestCase):
+    def test_mcp_stdio_spec_pins_selected_profile_in_args(self):
+        spec = mcp_stdio_spec(Settings(selected_profile="alice"))
+
+        self.assertEqual(spec["command"], "zotero-headless-mcp")
+        self.assertEqual(spec["args"], ["--profile", "alice"])
+
     def test_install_codex_setup_writes_mcp_server_block(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -304,6 +311,24 @@ class AgentSetupTests(unittest.TestCase):
         self.assertEqual(payload["main"], "src/index.ts")
         self.assertEqual(payload["openclaw"]["extensions"], ["./src/index.ts"])
         self.assertEqual(payload["openclaw"]["hooks"], ["./src/hooks/gateway-sync.ts"])
+
+    def test_openclaw_plugin_defaults_match_settings_defaults(self):
+        root = Path(__file__).resolve().parents[1]
+        settings = Settings()
+        plugin_roots = [
+            root / "plugins" / "openclaw-plugin-zotero",
+            root / "src" / "zotero_headless" / "packaged_plugins" / "openclaw-plugin-zotero",
+        ]
+
+        for plugin_root in plugin_roots:
+            manifest = json.loads((plugin_root / "openclaw.plugin.json").read_text(encoding="utf-8"))
+            daemon_props = manifest["configSchema"]["daemon"]["properties"]
+            self.assertEqual(daemon_props["host"]["default"], settings.daemon_host)
+            self.assertEqual(daemon_props["port"]["default"], settings.daemon_port)
+
+            index_ts = (plugin_root / "src" / "index.ts").read_text(encoding="utf-8")
+            self.assertIn(f'host: String(pluginCfg.daemon?.host ?? "{settings.daemon_host}")', index_ts)
+            self.assertIn(f"port: Number(pluginCfg.daemon?.port ?? {settings.daemon_port})", index_ts)
 
     def test_openclaw_plugin_source_does_not_ship_child_process_calls(self):
         root = Path(__file__).resolve().parents[1]

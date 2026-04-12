@@ -18,19 +18,19 @@ Use the HTTP API when:
 Start it directly:
 
 ```text
-zhl api --host 127.0.0.1 --port 8787
+zhl api --host 127.0.0.1 --port 23119
 ```
 
 Or run it through the daemon:
 
 ```text
-zhl-daemon serve --host 127.0.0.1 --port 8787 --sync-interval 300
+zhl-daemon serve --host 127.0.0.1 --port 23119 --sync-interval 300
 ```
 
 Quick check:
 
 ```text
-curl -s http://127.0.0.1:8787/capabilities
+curl -s http://127.0.0.1:23119/capabilities
 ```
 
 ## When To Use MCP

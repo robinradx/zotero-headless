@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 
-from .config import Settings
+from .config import Settings, active_profile_name
 from .daemon import current_daemon_status
 
 
@@ -11,6 +11,7 @@ def get_capabilities(settings: Settings) -> dict:
     daemon = current_daemon_status(settings)
     local_db_available = bool(sqlite_path and sqlite_path.exists())
     return {
+        "profile": active_profile_name(settings),
         "local_read": local_db_available,
         "local_write": local_db_available,
         "local_write_experimental": local_db_available,

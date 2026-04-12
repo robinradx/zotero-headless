@@ -213,10 +213,13 @@ def default_config_path() -> Path:
     return base / "zotero-headless" / "config.json"
 
 
-def default_state_dir() -> Path:
+def default_state_dir(profile: str | None = None) -> Path:
     override = os.environ.get("ZOTERO_HEADLESS_STATE_DIR")
     if override:
         return Path(override).expanduser()
     xdg = os.environ.get("XDG_STATE_HOME")
     base = Path(xdg).expanduser() if xdg else Path.home() / ".local" / "state"
-    return base / "zotero-headless"
+    root = base / "zotero-headless"
+    if not profile:
+        return root
+    return root / "profiles" / sanitize_component(profile)

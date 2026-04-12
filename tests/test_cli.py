@@ -54,6 +54,17 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("codex", output)
         self.assertIn("/tmp/codex-config.toml", output)
 
+    def test_setup_list_loads_named_profile_when_requested(self):
+        buffer = io.StringIO()
+        with patch("zotero_headless.cli.load_settings", return_value=Settings()) as load_settings_mock, patch(
+            "zotero_headless.cli.setup_list",
+            return_value=[],
+        ), redirect_stdout(buffer):
+            exit_code = main(["--profile", "alice", "setup", "list"])
+
+        self.assertEqual(exit_code, 0)
+        load_settings_mock.assert_called_with(profile="alice", ensure_dirs=False)
+
     def test_plugin_install_uses_human_output_by_default(self):
         buffer = io.StringIO()
         fake_result = {
@@ -153,6 +164,16 @@ class CliOutputTests(unittest.TestCase):
         self.assertIn("codex", output)
         self.assertIn("claude-code", output)
         self.assertIn("openclaw", output)
+
+    def test_api_command_uses_settings_daemon_port_by_default(self):
+        settings = Settings(daemon_port=23119)
+        with patch("zotero_headless.cli.load_settings", return_value=settings), patch(
+            "zotero_headless.cli.serve_api",
+        ) as serve_api_mock:
+            exit_code = main(["api"])
+
+        self.assertEqual(exit_code, 0)
+        serve_api_mock.assert_called_once_with(settings, "127.0.0.1", 23119)
 
     def test_skill_update_all_uses_human_output_by_default(self):
         buffer = io.StringIO()

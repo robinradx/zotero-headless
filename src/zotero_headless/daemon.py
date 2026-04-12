@@ -72,12 +72,16 @@ def build_runtime_command(settings: Settings, *, sync_interval_seconds: int = 0)
         sys.executable,
         "-m",
         "zotero_headless.daemon",
+    ]
+    if settings.selected_profile:
+        command.extend(["--profile", settings.selected_profile])
+    command.extend([
         "serve",
         "--host",
         settings.daemon_host,
         "--port",
         str(settings.daemon_port),
-    ]
+    ])
     if sync_interval_seconds > 0:
         command.extend(["--sync-interval", str(sync_interval_seconds)])
     return command
@@ -300,6 +304,7 @@ def current_daemon_status(settings: Settings | None = None) -> DaemonStatus:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="zotero-headless-daemon")
+    parser.add_argument("--profile", help="Load settings for the named profile.")
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve")
     serve.add_argument("--host")
@@ -311,7 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    settings = load_settings()
+    settings = load_settings(profile=args.profile)
     if args.command == "status":
         print(current_daemon_status(settings).to_dict())
         return 0

@@ -34,6 +34,11 @@ class DaemonTests(unittest.TestCase):
         self.assertIn("--sync-interval", command)
         self.assertIn("300", command)
 
+    def test_build_runtime_command_includes_profile_when_selected(self):
+        settings = Settings(state_dir="/tmp/zotero-headless", daemon_host="127.0.0.1", daemon_port=8787, selected_profile="alice")
+        command = build_runtime_command(settings)
+        self.assertEqual(command[:6], [command[0], "-m", "zotero_headless.daemon", "--profile", "alice", "serve"])
+
     def test_status_reports_runtime_as_implemented(self):
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(state_dir=tmp, mirror_db=str(Path(tmp) / "mirror.sqlite"))
